@@ -12,6 +12,6 @@ class VectorSearch:
         self.embedder = embedder
         self.top_k = top_k
 
-    def search(self, query: str) -> list[dict[str, Any]]:
-        embedding = self.embedder.embed_query(query)
+    async def search(self, query: str) -> list[dict[str, Any]]:
+        embedding = await self.embedder.embed_query(query)
         return self.db.vector_search(embedding, self.top_k)

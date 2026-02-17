@@ -21,11 +21,13 @@ class ResponseFormatter:
         }
 
     def _extract_confidence(self, text: str) -> str:
-        match = re.search(r"[Cc]onfidence:\s*(high|medium|low)", text)
-        return match.group(1) if match else "low"
+        match = re.search(r"[Cc]onfidence(?:\s+assessment)?:\s*(high|medium|low)", text, re.IGNORECASE)
+        return match.group(1).lower() if match else "low"
 
     def _strip_confidence_line(self, text: str) -> str:
-        return re.sub(r"\n*[Cc]onfidence:\s*(high|medium|low)\s*$", "", text).strip()
+        return re.sub(
+            r"\n*[Cc]onfidence(?:\s+assessment)?:\s*(high|medium|low)\.?\s*$", "", text
+        ).strip()
 
     def _build_sources(self, chunks: list[dict[str, Any]]) -> list[dict[str, str | int]]:
         seen = set()

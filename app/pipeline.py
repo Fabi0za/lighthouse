@@ -37,7 +37,7 @@ class QueryPipeline:
         detected_filters = parsed.to_filters()
 
         # 2. Vector search
-        retrieved_chunks = self.vector_search.search(question)
+        retrieved_chunks = await self.vector_search.search(question)
 
         # 3. Re-rank
         reranked_chunks = self.reranker.rerank(

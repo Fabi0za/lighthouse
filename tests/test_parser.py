@@ -11,22 +11,37 @@ def parser():
 
 @pytest.mark.asyncio
 async def test_parse_pdf_returns_sections(parser):
-    mock_response = MagicMock()
-    mock_response.status_code = 200
-    mock_response.json.return_value = {
+    mock_upload = MagicMock()
+    mock_upload.status_code = 200
+    mock_upload.json.return_value = {"file_id": "reducto://abc123"}
+
+    mock_parse = MagicMock()
+    mock_parse.status_code = 200
+    mock_parse.json.return_value = {
         "result": {
-            "blocks": [
-                {"type": "header", "content": "Chapter 1: Overview", "page": 1},
-                {"type": "text", "content": "This is the overview section content.", "page": 1},
-                {"type": "header", "content": "Chapter 2: Wiring", "page": 3},
-                {"type": "text", "content": "Wiring instructions go here.", "page": 3},
-            ]
+            "type": "full",
+            "chunks": [
+                {
+                    "content": "Chapter 1 content",
+                    "blocks": [
+                        {"type": "Title", "content": "Chapter 1: Overview", "bbox": {"page": 1}},
+                        {"type": "Text", "content": "This is the overview section content.", "bbox": {"page": 1}},
+                    ],
+                },
+                {
+                    "content": "Chapter 2 content",
+                    "blocks": [
+                        {"type": "Section Header", "content": "Chapter 2: Wiring", "bbox": {"page": 3}},
+                        {"type": "Text", "content": "Wiring instructions go here.", "bbox": {"page": 3}},
+                    ],
+                },
+            ],
         }
     }
 
     with (
         patch("builtins.open", mock_open(read_data=b"fake pdf")),
-        patch.object(parser.client, "post", new_callable=AsyncMock, return_value=mock_response),
+        patch.object(parser.client, "post", new_callable=AsyncMock, side_effect=[mock_upload, mock_parse]),
     ):
         raw_output, sections = await parser.parse_pdf("/tmp/test.pdf")
         assert len(sections) == 2
@@ -38,39 +53,61 @@ async def test_parse_pdf_returns_sections(parser):
 
 @pytest.mark.asyncio
 async def test_parse_pdf_preserves_raw_output(parser):
-    mock_response = MagicMock()
-    mock_response.status_code = 200
-    mock_response.json.return_value = {
+    mock_upload = MagicMock()
+    mock_upload.status_code = 200
+    mock_upload.json.return_value = {"file_id": "reducto://abc123"}
+
+    expected_raw = {
         "result": {
-            "blocks": [
-                {"type": "text", "content": "Some content", "page": 1},
-            ]
+            "type": "full",
+            "chunks": [
+                {
+                    "content": "Some content",
+                    "blocks": [
+                        {"type": "Text", "content": "Some content", "bbox": {"page": 1}},
+                    ],
+                }
+            ],
         }
     }
 
+    mock_parse = MagicMock()
+    mock_parse.status_code = 200
+    mock_parse.json.return_value = expected_raw
+
     with (
         patch("builtins.open", mock_open(read_data=b"fake pdf")),
-        patch.object(parser.client, "post", new_callable=AsyncMock, return_value=mock_response),
+        patch.object(parser.client, "post", new_callable=AsyncMock, side_effect=[mock_upload, mock_parse]),
     ):
         raw_output, sections = await parser.parse_pdf("/tmp/test.pdf")
-        assert raw_output == mock_response.json.return_value
+        assert raw_output == expected_raw
 
 
 @pytest.mark.asyncio
 async def test_parse_pdf_no_headers_uses_default(parser):
-    mock_response = MagicMock()
-    mock_response.status_code = 200
-    mock_response.json.return_value = {
+    mock_upload = MagicMock()
+    mock_upload.status_code = 200
+    mock_upload.json.return_value = {"file_id": "reducto://abc123"}
+
+    mock_parse = MagicMock()
+    mock_parse.status_code = 200
+    mock_parse.json.return_value = {
         "result": {
-            "blocks": [
-                {"type": "text", "content": "Content without headers.", "page": 1},
-            ]
+            "type": "full",
+            "chunks": [
+                {
+                    "content": "Content without headers.",
+                    "blocks": [
+                        {"type": "Text", "content": "Content without headers.", "bbox": {"page": 1}},
+                    ],
+                }
+            ],
         }
     }
 
     with (
         patch("builtins.open", mock_open(read_data=b"fake pdf")),
-        patch.object(parser.client, "post", new_callable=AsyncMock, return_value=mock_response),
+        patch.object(parser.client, "post", new_callable=AsyncMock, side_effect=[mock_upload, mock_parse]),
     ):
         raw_output, sections = await parser.parse_pdf("/tmp/test.pdf")
         assert len(sections) == 1

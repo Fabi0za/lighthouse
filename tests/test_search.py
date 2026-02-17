@@ -1,5 +1,7 @@
 import uuid
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 
 from app.retrieval.search import VectorSearch
 
@@ -32,24 +34,26 @@ def mock_db():
 
 
 def mock_embedder():
-    embedder = MagicMock()
-    embedder.embed_query = MagicMock(return_value=[0.1] * 1536)
+    embedder = AsyncMock()
+    embedder.embed_query.return_value = [0.1] * 1536
     return embedder
 
 
-def test_search_returns_chunks():
+@pytest.mark.asyncio
+async def test_search_returns_chunks():
     db = mock_db()
     embedder = mock_embedder()
     search = VectorSearch(db=db, embedder=embedder, top_k=20)
-    results = search.search("How do I wire component X?")
+    results = await search.search("How do I wire component X?")
     assert len(results) == 2
     embedder.embed_query.assert_called_once_with("How do I wire component X?")
     db.vector_search.assert_called_once()
 
 
-def test_search_passes_top_k():
+@pytest.mark.asyncio
+async def test_search_passes_top_k():
     db = mock_db()
     embedder = mock_embedder()
     search = VectorSearch(db=db, embedder=embedder, top_k=10)
-    search.search("test query")
+    await search.search("test query")
     db.vector_search.assert_called_once_with([0.1] * 1536, 10)

@@ -15,7 +15,7 @@ def mock_deps():
         to_filters=lambda: {"grid_provider": "GridCo"},
     )
 
-    vector_search = MagicMock()
+    vector_search = AsyncMock()
     vector_search.search.return_value = [
         {
             "content": "Wire X to terminal Y.",

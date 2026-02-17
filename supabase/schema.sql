@@ -96,7 +96,8 @@ returns table (
     grid_provider text,
     hierarchy_priority integer,
     token_count integer,
-    similarity float
+    similarity float,
+    document_title text
 )
 language sql stable
 as $$
@@ -111,8 +112,10 @@ as $$
         dc.grid_provider,
         dc.hierarchy_priority,
         dc.token_count,
-        1 - (dc.embedding <=> query_embedding) as similarity
+        1 - (dc.embedding <=> query_embedding) as similarity,
+        d.title as document_title
     from document_chunks dc
+    join documents d on d.id = dc.document_id
     order by dc.embedding <=> query_embedding
     limit match_count;
 $$;
