@@ -7,7 +7,6 @@ from app.models.schemas import (
     QueryRequest,
     QueryResponse,
     QuerySource,
-    QueryLogResponse,
 )
 
 

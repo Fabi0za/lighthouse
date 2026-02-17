@@ -4,7 +4,7 @@ from typing import Any
 
 from app.models.database import DatabaseClient
 from app.pipeline import QueryPipeline
-from eval.metrics import refusal_accuracy, retrieval_recall
+from eval.metrics import refusal_accuracy
 
 
 class EvalRunner:
