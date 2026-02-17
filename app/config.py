@@ -20,4 +20,5 @@ class Settings(BaseSettings):
     model_config = {"env_file": ".env"}
 
 
-settings = Settings()
+def get_settings() -> Settings:
+    return Settings()
