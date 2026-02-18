@@ -9,6 +9,10 @@ REFUSAL_PHRASES = [
     "cannot answer",
     "unable to answer",
     "no relevant context",
+    "ich habe nicht genügend informationen",
+    "nicht genug informationen",
+    "kann nicht beantwortet werden",
+    "keine relevanten informationen",
 ]
 
 

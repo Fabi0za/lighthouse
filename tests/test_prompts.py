@@ -5,7 +5,7 @@ def test_system_prompt_contains_key_instructions():
     prompt = build_system_prompt()
     assert "only" in prompt.lower() and "provided context" in prompt.lower()
     assert "cite" in prompt.lower()
-    assert "don't have enough information" in prompt.lower() or "insufficient" in prompt.lower()
+    assert "nicht genügend informationen" in prompt.lower()
     assert "hierarchy" in prompt.lower() or "higher-priority" in prompt.lower()
 
 

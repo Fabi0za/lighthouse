@@ -56,3 +56,24 @@ def test_refusal_accuracy_false_refusal():
         question_type="answerable",
         answer="I don't have enough information to answer this confidently.",
     ) is False
+
+
+def test_refusal_accuracy_german_refusal_detected():
+    assert refusal_accuracy(
+        question_type="unanswerable",
+        answer="Ich habe nicht genügend Informationen, um diese Frage sicher zu beantworten.",
+    ) is True
+
+
+def test_refusal_accuracy_german_refusal_partial_phrase():
+    assert refusal_accuracy(
+        question_type="unanswerable",
+        answer="Es gibt nicht genug Informationen in den Dokumenten.",
+    ) is True
+
+
+def test_refusal_accuracy_german_false_refusal():
+    assert refusal_accuracy(
+        question_type="answerable",
+        answer="Ich habe nicht genügend Informationen, um diese Frage zu beantworten.",
+    ) is False
