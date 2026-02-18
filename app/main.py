@@ -12,11 +12,13 @@ from app.models.schemas import (
     QueryRequest,
     EvalRunRequest,
 )
+from app.config import Settings
 from app.models.database import DatabaseClient
 from app.pipeline import QueryPipeline
 from app.ingestion.parser import ReductoParser
 from app.ingestion.chunker import Chunker
 from app.ingestion.embedder import Embedder
+from eval.runner import EvalRunner
 
 
 def create_app(
@@ -25,6 +27,7 @@ def create_app(
     parser: ReductoParser | None = None,
     chunker: Chunker | None = None,
     embedder: Embedder | None = None,
+    settings: Settings | None = None,
 ) -> FastAPI:
     app = FastAPI(title="RAG Technical Knowledge Assistant")
 
@@ -129,8 +132,30 @@ def create_app(
             os.unlink(tmp_path)
 
     @app.post("/eval/run")
-    async def run_eval(request: EvalRunRequest | None = None) -> dict[str, str]:
-        return {"status": "not yet implemented"}
+    async def run_eval(request: EvalRunRequest | None = None) -> dict[str, Any]:
+        if not all([db, pipeline]):
+            raise HTTPException(status_code=503, detail="Pipeline not initialized")
+
+        config_snapshot = {}
+        if settings:
+            config_snapshot = {
+                "embedding_model": settings.embedding_model,
+                "llm_model": settings.llm_model,
+                "llm_provider": settings.llm_provider,
+                "chunk_size": settings.chunk_size,
+                "chunk_overlap": settings.chunk_overlap,
+                "retrieval_top_k": settings.retrieval_top_k,
+                "rerank_top_n": settings.rerank_top_n,
+            }
+
+        notes = request.notes if request else None
+        runner = EvalRunner(
+            db=db,
+            pipeline=pipeline,
+            config_snapshot=config_snapshot,
+            notes=notes,
+        )
+        return await runner.run()
 
     @app.get("/eval/runs")
     def list_eval_runs() -> list[dict[str, Any]]:

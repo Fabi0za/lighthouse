@@ -58,4 +58,5 @@ def build_dependencies():
         "parser": parser,
         "chunker": chunker,
         "embedder": embedder,
+        "settings": settings,
     }
