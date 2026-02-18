@@ -30,10 +30,9 @@ create table if not exists document_chunks (
     token_count integer not null
 );
 
--- Index for vector similarity search
+-- Index for vector similarity search (HNSW: no tuning needed, exact at <10k rows)
 create index if not exists document_chunks_embedding_idx
-    on document_chunks using ivfflat (embedding vector_cosine_ops)
-    with (lists = 100);
+    on document_chunks using hnsw (embedding vector_cosine_ops);
 
 -- Hierarchy rules
 create table if not exists hierarchy_rules (

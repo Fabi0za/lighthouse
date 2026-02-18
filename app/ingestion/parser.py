@@ -7,6 +7,7 @@ import httpx
 
 
 HEADER_TYPES = {"Title", "Section Header", "Header"}
+MIN_BLOCK_LENGTH = 10  # Skip blocks shorter than this (OCR artefacts, icons)
 
 
 def _html_table_to_markdown(html: str) -> str:
@@ -103,7 +104,12 @@ class ReductoParser:
         # Step 2: Parse the uploaded file
         parse_response = await self.client.post(
             "/parse",
-            json={"input": file_id},
+            json={
+                "input": file_id,
+                "retrieval": {
+                    "filter_blocks": ["Footer", "Page Number"],
+                },
+            },
         )
         parse_response.raise_for_status()
         raw_output = parse_response.json()
@@ -157,7 +163,7 @@ class ReductoParser:
                 current_title = content or "Untitled Section"
                 current_page = page
             else:
-                if content.strip():
+                if content.strip() and len(content.strip()) >= MIN_BLOCK_LENGTH:
                     current_content.append(_html_table_to_markdown(content))
                 if not sections and current_title == "Untitled Section":
                     current_page = page
