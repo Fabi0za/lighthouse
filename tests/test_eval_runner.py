@@ -61,3 +61,38 @@ async def test_eval_runner_stores_results(mock_deps):
     await runner.run()
 
     mock_deps["db"].insert_eval_run.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_eval_runner_computes_retrieval_recall(mock_deps):
+    # Set required_source_docs on the answerable question
+    doc_id = mock_deps["db"].get_eval_questions.return_value[0]["required_source_docs"][0]
+    # Make pipeline return chunks that include the required doc
+    mock_deps["pipeline"].run.return_value["retrieved_chunks"] = [
+        {"document_id": doc_id, "content": "relevant chunk"},
+    ]
+    mock_deps["pipeline"].run.return_value["reranked_chunks"] = [
+        {"document_id": doc_id, "content": "relevant chunk"},
+    ]
+
+    runner = EvalRunner(db=mock_deps["db"], pipeline=mock_deps["pipeline"], config_snapshot={})
+    results = await runner.run()
+
+    answerable_result = [r for r in results["results"] if r["question_type"] == "answerable"][0]
+    assert answerable_result["retrieval_recall"] == 1.0
+
+
+@pytest.mark.asyncio
+async def test_eval_runner_retrieval_recall_zero_when_wrong_docs(mock_deps):
+    mock_deps["pipeline"].run.return_value["retrieved_chunks"] = [
+        {"document_id": "wrong-doc-id", "content": "irrelevant chunk"},
+    ]
+    mock_deps["pipeline"].run.return_value["reranked_chunks"] = [
+        {"document_id": "wrong-doc-id", "content": "irrelevant chunk"},
+    ]
+
+    runner = EvalRunner(db=mock_deps["db"], pipeline=mock_deps["pipeline"], config_snapshot={})
+    results = await runner.run()
+
+    answerable_result = [r for r in results["results"] if r["question_type"] == "answerable"][0]
+    assert answerable_result["retrieval_recall"] == 0.0

@@ -4,7 +4,7 @@ from typing import Any
 
 from app.models.database import DatabaseClient
 from app.pipeline import QueryPipeline
-from eval.metrics import refusal_accuracy
+from eval.metrics import refusal_accuracy, retrieval_recall
 
 
 class EvalRunner:
@@ -58,7 +58,9 @@ class EvalRunner:
         # Retrieval recall (only for answerable questions with required docs)
         required_docs = question.get("required_source_docs", [])
         if required_docs:
-            scores["retrieval_recall"] = None
+            scores["retrieval_recall"] = retrieval_recall(
+                required_docs, pipeline_result.get("retrieved_chunks", [])
+            )
         else:
             scores["retrieval_recall"] = None
 
@@ -68,7 +70,11 @@ class EvalRunner:
         refusal_scores = [r["refusal_correct"] for r in results if r["refusal_correct"] is not None]
         refusal_rate = sum(refusal_scores) / len(refusal_scores) if refusal_scores else 0.0
 
+        recall_scores = [r["retrieval_recall"] for r in results if r["retrieval_recall"] is not None]
+        avg_recall = sum(recall_scores) / len(recall_scores) if recall_scores else 0.0
+
         return {
             "total_questions": len(results),
             "refusal_accuracy": refusal_rate,
+            "retrieval_recall": avg_recall,
         }
