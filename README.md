@@ -1,26 +1,40 @@
 # Voltara RAG
 
-Hierarchical RAG system for electrical installation technical documents. Field engineers ask natural language questions and get precise, cited answers that respect document hierarchy — grid provider rules override general regulations.
+Hierarchical RAG system for electrical installation technical documents (German). Field engineers ask natural language questions and get precise, cited answers that respect document hierarchy — grid provider rules override general regulations.
 
 ## How it works
 
 ```
-PDF Upload → Reducto API → Chunking → Embeddings → Supabase pgvector
-                                                          │
-User Question → Query Parser → Vector Search (top-20) → Re-rank (top-8) → LLM → Cited Answer
+PDF Upload → Reducto API → Table-Aware Chunking → Embeddings → Supabase pgvector (HNSW)
+                                                                        │
+User Question → Query Parser → Vector Search (top-40) → Cohere Rerank (top-8) → GPT-4o → Cited Answer
 ```
 
+- **Table-aware chunking**: preserves table structure, adds contextual headers (document title + section)
+- **Neural re-ranking**: Cohere rerank-v3.5 replaces rule-based scoring for better relevance
 - **Metadata-enriched retrieval**: chunks tagged with doc type, grid provider, hierarchy priority
-- **Re-ranking**: provider boost + hierarchy weighting ensures the right documents take precedence
 - **Safety-first**: refuses to answer when context is insufficient rather than guessing
 - **Full trace logging**: every query logs retrieved chunks, reranked chunks, prompt, and response
+
+## Current eval results
+
+55 questions across 5 German technical PDFs (791 chunks):
+
+| Metric | Score |
+|--------|-------|
+| Refusal accuracy | 94.5% |
+| Retrieval recall | 100% |
+| Answer correctness | 84% |
+
+Evaluated with LLM-as-judge (GPT-4o-mini) against required facts per question.
 
 ## Tech stack
 
 - **Python 3.11** / FastAPI
-- **Supabase** (PostgreSQL + pgvector)
+- **Supabase** (PostgreSQL + pgvector with HNSW index)
 - **Reducto API** for PDF parsing
-- **OpenAI** for embeddings (`text-embedding-3-small`) and LLM (`gpt-4o`)
+- **OpenAI** for embeddings (`text-embedding-3-small`, 1536d) and LLM (`gpt-4o`)
+- **Cohere** for neural re-ranking (`rerank-v3.5`)
 - LLM provider is configurable (Anthropic/OpenAI)
 
 ## Setup
@@ -45,10 +59,14 @@ Required keys:
 - `SUPABASE_URL`, `SUPABASE_KEY`, `SUPABASE_SERVICE_KEY`
 - `REDUCTO_API_KEY`
 - `OPENAI_API_KEY`
+- `COHERE_API_KEY`
+
+Optional:
+- `ANTHROPIC_API_KEY` (if using Anthropic as LLM provider)
 
 ### 3. Set up database
 
-Run `supabase/schema.sql` in your Supabase SQL Editor to create tables and the vector search function.
+Run `supabase/schema.sql` in your Supabase SQL Editor to create tables, HNSW index, and search functions.
 
 ### 4. Run
 
@@ -79,6 +97,12 @@ python scripts/test_ingest.py <pdf_path> [title] [doc_type] [priority]
 
 # Query the system
 python scripts/test_query.py "Your question here"
+
+# Compare LLM models on failing questions
+python scripts/test_models.py
+
+# Test Cohere reranker on hard questions
+python scripts/test_cohere_rerank.py
 ```
 
 ## Tests
@@ -97,15 +121,15 @@ app/
 ├── pipeline.py            # Query orchestrator
 ├── models/
 │   ├── schemas.py         # Pydantic models
-│   └── database.py        # Supabase client
+│   └── database.py        # Supabase client (vector + keyword search)
 ├── ingestion/
 │   ├── parser.py          # Reducto PDF parser
-│   ├── chunker.py         # Section-aware chunking
+│   ├── chunker.py         # Table-aware, section-based chunking
 │   └── embedder.py        # OpenAI embeddings
 ├── retrieval/
 │   ├── query_parser.py    # Grid provider detection
-│   ├── reranker.py        # Metadata-aware re-ranking
-│   └── search.py          # Vector similarity search
+│   ├── reranker.py        # Cohere neural reranker (+ legacy rule-based)
+│   └── search.py          # Vector search (+ hybrid search infrastructure)
 ├── generation/
 │   ├── llm.py             # LLM client (Anthropic/OpenAI)
 │   ├── prompts.py         # Prompt templates
@@ -113,8 +137,23 @@ app/
 └── logging/
     └── query_logger.py    # Full query trace logging
 eval/
-├── metrics.py             # Retrieval recall, refusal accuracy
+├── metrics.py             # Retrieval recall, refusal accuracy, LLM-as-judge correctness
 └── runner.py              # Eval runner
 supabase/
-└── schema.sql             # Database schema + vector search function
+└── schema.sql             # Database schema, HNSW index, vector + keyword search functions
 ```
+
+## Optimization history
+
+Key iterations that moved metrics (55 questions, 5 PDFs):
+
+| Eval | Change | Refusal | Recall | Correctness |
+|------|--------|---------|--------|-------------|
+| 10 | Baseline (55 questions) | 89.1% | 100% | 65.6% |
+| 11 | Table-aware chunker + contextual headers | 89.1% | 100% | 67.7% |
+| 13 | Corrected over-specified eval facts | 89.1% | 100% | 75.0% |
+| 16 | Cohere rerank-v3.5 | 89.1% | 100% | 76.0% |
+| 17 | retrieval_top_k 20 → 40 | 94.5% | 100% | 81.2% |
+| 19 | Second eval fact correction | 94.5% | 100% | ~84% |
+
+Changes that were tested and reverted (no improvement): hybrid search (BM25+RRF), prompt tuning, Sonnet 4.6, table reformatting at prompt level.
