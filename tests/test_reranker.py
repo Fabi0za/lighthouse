@@ -60,3 +60,56 @@ def test_reranker_no_chunks():
     reranker = Reranker(top_n=5)
     result = reranker.rerank([], detected_provider=None)
     assert result == []
+
+
+def test_reranker_diversity_avoids_same_section():
+    """When many chunks come from the same section, diversity selection
+    should promote chunks from other sections into the top-N."""
+    reranker = Reranker(top_n=4, diversity_penalty=0.5)
+    chunks = [
+        _chunk(content="general rule A", similarity=0.95),
+        _chunk(content="general rule B", similarity=0.93),
+        _chunk(content="general rule C", similarity=0.91),
+        _chunk(content="general rule D", similarity=0.89),
+        # Different section, slightly lower score — should still make top-4
+        {
+            **_chunk(content="altitude exception", similarity=0.85),
+            "section_title": "Anhang 1",
+        },
+    ]
+    # All first 4 chunks have section_title="Section" (from _chunk helper)
+    result = reranker.rerank(chunks, detected_provider=None)
+    contents = [r["content"] for r in result]
+    assert "altitude exception" in contents
+
+
+def test_reranker_diversity_across_documents():
+    """Chunks from different documents should be preferred over redundant
+    chunks from the same document."""
+    reranker = Reranker(top_n=3, diversity_penalty=0.5)
+    doc_a = str(uuid.uuid4())
+    doc_b = str(uuid.uuid4())
+    chunks = [
+        {**_chunk(content="doc A chunk 1", similarity=0.95), "document_id": doc_a},
+        {**_chunk(content="doc A chunk 2", similarity=0.93), "document_id": doc_a},
+        {**_chunk(content="doc A chunk 3", similarity=0.91), "document_id": doc_a},
+        {**_chunk(content="doc B chunk 1", similarity=0.85), "document_id": doc_b, "section_title": "Other"},
+    ]
+    result = reranker.rerank(chunks, detected_provider=None)
+    doc_ids = [r.get("document_id") for r in result]
+    assert doc_b in doc_ids
+
+
+def test_reranker_diversity_zero_penalty_behaves_like_before():
+    """With diversity_penalty=0, behavior should match pure score ranking."""
+    reranker = Reranker(top_n=3, diversity_penalty=0.0)
+    chunks = [
+        _chunk(content="A", similarity=0.95),
+        _chunk(content="B", similarity=0.93),
+        _chunk(content="C", similarity=0.91),
+        {**_chunk(content="D", similarity=0.85), "section_title": "Other"},
+    ]
+    result = reranker.rerank(chunks, detected_provider=None)
+    # Pure score order — D should NOT make it in
+    contents = [r["content"] for r in result]
+    assert contents == ["A", "B", "C"]
