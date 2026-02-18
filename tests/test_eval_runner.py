@@ -1,8 +1,9 @@
 import uuid
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from eval.metrics import answer_correctness
 from eval.runner import EvalRunner
 
 
@@ -96,3 +97,83 @@ async def test_eval_runner_retrieval_recall_zero_when_wrong_docs(mock_deps):
 
     answerable_result = [r for r in results["results"] if r["question_type"] == "answerable"][0]
     assert answerable_result["retrieval_recall"] == 0.0
+
+
+@pytest.mark.asyncio
+async def test_eval_runner_answer_correctness_none_without_api_key(mock_deps):
+    """Without openai_api_key, answer_correctness should be None."""
+    runner = EvalRunner(db=mock_deps["db"], pipeline=mock_deps["pipeline"], config_snapshot={})
+    results = await runner.run()
+
+    for r in results["results"]:
+        assert r["answer_correctness"] is None
+
+
+@pytest.mark.asyncio
+async def test_answer_correctness_parses_judge_response():
+    """Test that answer_correctness correctly parses the judge LLM response."""
+    mock_response = {
+        "choices": [
+            {
+                "message": {
+                    "content": '{"results": [{"fact": "terminal Y", "present": true, "reason": "mentioned"}]}'
+                }
+            }
+        ]
+    }
+
+    with patch("eval.metrics.httpx.AsyncClient") as mock_client_cls:
+        mock_client = AsyncMock()
+        mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=False)
+
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = mock_response
+        mock_resp.raise_for_status = MagicMock()
+        mock_client.post.return_value = mock_resp
+
+        result = await answer_correctness(
+            question="How do I wire X?",
+            generated_answer="Wire X to terminal Y.",
+            expected_answer="Wire X to terminal Y.",
+            required_facts=["terminal Y"],
+            openai_api_key="test-key",
+        )
+
+    assert result["score"] == 1.0
+    assert len(result["details"]) == 1
+    assert result["details"][0]["present"] is True
+
+
+@pytest.mark.asyncio
+async def test_answer_correctness_partial_score():
+    """Test partial score when some facts are missing."""
+    mock_response = {
+        "choices": [
+            {
+                "message": {
+                    "content": '{"results": [{"fact": "fact A", "present": true, "reason": "found"}, {"fact": "fact B", "present": false, "reason": "missing"}]}'
+                }
+            }
+        ]
+    }
+
+    with patch("eval.metrics.httpx.AsyncClient") as mock_client_cls:
+        mock_client = AsyncMock()
+        mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=False)
+
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = mock_response
+        mock_resp.raise_for_status = MagicMock()
+        mock_client.post.return_value = mock_resp
+
+        result = await answer_correctness(
+            question="Test?",
+            generated_answer="Only fact A here.",
+            expected_answer="Both fact A and fact B.",
+            required_facts=["fact A", "fact B"],
+            openai_api_key="test-key",
+        )
+
+    assert result["score"] == 0.5

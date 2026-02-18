@@ -149,11 +149,13 @@ def create_app(
             }
 
         notes = request.notes if request else None
+        openai_key = settings.openai_api_key if settings else None
         runner = EvalRunner(
             db=db,
             pipeline=pipeline,
             config_snapshot=config_snapshot,
             notes=notes,
+            openai_api_key=openai_key,
         )
         return await runner.run()
 

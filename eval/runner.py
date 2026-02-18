@@ -4,7 +4,7 @@ from typing import Any
 
 from app.models.database import DatabaseClient
 from app.pipeline import QueryPipeline
-from eval.metrics import refusal_accuracy, retrieval_recall
+from eval.metrics import answer_correctness, refusal_accuracy, retrieval_recall
 
 
 class EvalRunner:
@@ -14,11 +14,13 @@ class EvalRunner:
         pipeline: QueryPipeline,
         config_snapshot: dict[str, Any],
         notes: str | None = None,
+        openai_api_key: str | None = None,
     ):
         self.db = db
         self.pipeline = pipeline
         self.config_snapshot = config_snapshot
         self.notes = notes
+        self.openai_api_key = openai_api_key
 
     async def run(self) -> dict[str, Any]:
         questions = self.db.get_eval_questions()
@@ -64,6 +66,22 @@ class EvalRunner:
         else:
             scores["retrieval_recall"] = None
 
+        # Answer correctness (only for answerable questions with required facts)
+        required_facts = question.get("required_facts", [])
+        if required_facts and question["question_type"] == "answerable" and self.openai_api_key:
+            correctness = await answer_correctness(
+                question=question["question"],
+                generated_answer=pipeline_result["answer"],
+                expected_answer=question.get("expected_answer", ""),
+                required_facts=required_facts,
+                openai_api_key=self.openai_api_key,
+            )
+            scores["answer_correctness"] = correctness["score"]
+            scores["fact_details"] = correctness["details"]
+        else:
+            scores["answer_correctness"] = None
+            scores["fact_details"] = None
+
         return scores
 
     def _aggregate(self, results: list[dict[str, Any]]) -> dict[str, Any]:
@@ -73,8 +91,16 @@ class EvalRunner:
         recall_scores = [r["retrieval_recall"] for r in results if r["retrieval_recall"] is not None]
         avg_recall = sum(recall_scores) / len(recall_scores) if recall_scores else 0.0
 
+        correctness_scores = [
+            r["answer_correctness"] for r in results if r["answer_correctness"] is not None
+        ]
+        avg_correctness = (
+            sum(correctness_scores) / len(correctness_scores) if correctness_scores else 0.0
+        )
+
         return {
             "total_questions": len(results),
             "refusal_accuracy": refusal_rate,
             "retrieval_recall": avg_recall,
+            "answer_correctness": avg_correctness,
         }
