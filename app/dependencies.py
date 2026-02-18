@@ -8,7 +8,7 @@ from app.logging.query_logger import QueryLogger
 from app.models.database import DatabaseClient
 from app.pipeline import QueryPipeline
 from app.retrieval.query_parser import QueryParser
-from app.retrieval.reranker import Reranker
+from app.retrieval.reranker import CohereReranker
 from app.retrieval.search import VectorSearch
 
 
@@ -39,7 +39,7 @@ def build_dependencies():
     query_parser = QueryParser(known_providers=known_providers)
 
     vector_search = VectorSearch(db=db, embedder=embedder, top_k=settings.retrieval_top_k)
-    reranker = Reranker(top_n=settings.rerank_top_n)
+    reranker = CohereReranker(api_key=settings.cohere_api_key, top_n=settings.rerank_top_n)
     formatter = ResponseFormatter()
     logger = QueryLogger(db=db)
 

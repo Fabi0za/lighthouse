@@ -8,7 +8,7 @@ from app.generation.llm import LLMClient
 from app.generation.prompts import build_system_prompt, build_user_prompt
 from app.logging.query_logger import QueryLogger
 from app.retrieval.query_parser import QueryParser
-from app.retrieval.reranker import Reranker
+from app.retrieval.reranker import CohereReranker
 from app.retrieval.search import VectorSearch
 
 
@@ -17,7 +17,7 @@ class QueryPipeline:
         self,
         query_parser: QueryParser,
         vector_search: VectorSearch,
-        reranker: Reranker,
+        reranker: CohereReranker,
         llm: LLMClient,
         formatter: ResponseFormatter,
         logger: QueryLogger,
@@ -41,7 +41,7 @@ class QueryPipeline:
 
         # 3. Re-rank
         reranked_chunks = self.reranker.rerank(
-            retrieved_chunks, detected_provider=parsed.detected_provider
+            retrieved_chunks, query=question, detected_provider=parsed.detected_provider
         )
 
         # 4. Generate answer

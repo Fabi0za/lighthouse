@@ -2,8 +2,45 @@ from __future__ import annotations
 
 from typing import Any
 
+import cohere
+
+
+class CohereReranker:
+    """Neural reranker using Cohere's rerank API."""
+
+    def __init__(self, api_key: str, top_n: int = 8, model: str = "rerank-v3.5"):
+        self.client = cohere.Client(api_key=api_key)
+        self.top_n = top_n
+        self.model = model
+
+    def rerank(
+        self,
+        chunks: list[dict[str, Any]],
+        query: str,
+        detected_provider: str | None = None,
+    ) -> list[dict[str, Any]]:
+        if not chunks:
+            return []
+
+        docs = [c["content"] for c in chunks]
+        response = self.client.rerank(
+            query=query,
+            documents=docs,
+            top_n=self.top_n,
+            model=self.model,
+        )
+
+        reranked = []
+        for result in response.results:
+            chunk = {**chunks[result.index], "rerank_score": result.relevance_score}
+            reranked.append(chunk)
+
+        return reranked
+
 
 class Reranker:
+    """Rule-based reranker (legacy, kept for fallback/testing)."""
+
     def __init__(
         self,
         top_n: int = 8,
@@ -24,7 +61,6 @@ class Reranker:
         if not chunks:
             return []
 
-        # Score all chunks
         scored = []
         for chunk in chunks:
             score = chunk.get("similarity", 0.0)
@@ -41,7 +77,6 @@ class Reranker:
         if self.diversity_penalty == 0.0:
             return scored[: self.top_n]
 
-        # MMR-style greedy selection with diversity penalty
         return self._select_diverse(scored)
 
     def _select_diverse(self, scored: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -50,7 +85,6 @@ class Reranker:
 
         while len(selected) < self.top_n and remaining:
             if not selected:
-                # First pick: always the highest-scoring chunk
                 selected.append(remaining.pop(0))
                 continue
 
@@ -76,12 +110,10 @@ class Reranker:
         for s in selected:
             overlap = 0.0
 
-            # Same section title = high redundancy
             if candidate.get("section_title") and candidate["section_title"] == s.get(
                 "section_title"
             ):
                 overlap = max(overlap, 1.0)
-            # Same document but different section = moderate redundancy
             elif candidate.get("document_id") and candidate["document_id"] == s.get(
                 "document_id"
             ):

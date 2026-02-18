@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     reducto_api_key: str
     openai_api_key: str = ""
     anthropic_api_key: str = ""
+    cohere_api_key: str = ""
     embedding_model: str = "text-embedding-3-small"
     embedding_dimensions: int = 1536
     llm_provider: str = "anthropic"
