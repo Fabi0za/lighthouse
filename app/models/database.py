@@ -74,6 +74,15 @@ class DatabaseClient:
             },
         ).execute().data
 
+    def keyword_search(self, query: str, top_k: int = 20) -> list[dict[str, Any]]:
+        return self.client.rpc(
+            "keyword_search_chunks",
+            {
+                "search_query": query,
+                "match_count": top_k,
+            },
+        ).execute().data
+
     def insert_query_log(self, log_data: dict[str, Any]) -> dict[str, Any]:
         return self.client.table("query_logs").insert(log_data).execute().data[0]
 

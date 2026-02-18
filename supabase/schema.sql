@@ -30,9 +30,17 @@ create table if not exists document_chunks (
     token_count integer not null
 );
 
+-- Full-text search column (German config)
+alter table document_chunks add column if not exists content_tsv tsvector
+    generated always as (to_tsvector('german', content)) stored;
+
 -- Index for vector similarity search (HNSW: no tuning needed, exact at <10k rows)
 create index if not exists document_chunks_embedding_idx
     on document_chunks using hnsw (embedding vector_cosine_ops);
+
+-- Index for full-text keyword search
+create index if not exists document_chunks_content_tsv_idx
+    on document_chunks using gin (content_tsv);
 
 -- Hierarchy rules
 create table if not exists hierarchy_rules (
@@ -116,5 +124,46 @@ as $$
     from document_chunks dc
     join documents d on d.id = dc.document_id
     order by dc.embedding <=> query_embedding
+    limit match_count;
+$$;
+
+-- Keyword (full-text) search function
+create or replace function keyword_search_chunks(
+    search_query text,
+    match_count integer default 20
+)
+returns table (
+    id uuid,
+    document_id uuid,
+    content text,
+    section_title text,
+    page_number integer,
+    chunk_index integer,
+    doc_type text,
+    grid_provider text,
+    hierarchy_priority integer,
+    token_count integer,
+    rank float,
+    document_title text
+)
+language sql stable
+as $$
+    select
+        dc.id,
+        dc.document_id,
+        dc.content,
+        dc.section_title,
+        dc.page_number,
+        dc.chunk_index,
+        dc.doc_type,
+        dc.grid_provider,
+        dc.hierarchy_priority,
+        dc.token_count,
+        ts_rank(dc.content_tsv, websearch_to_tsquery('german', search_query)) as rank,
+        d.title as document_title
+    from document_chunks dc
+    join documents d on d.id = dc.document_id
+    where dc.content_tsv @@ websearch_to_tsquery('german', search_query)
+    order by rank desc
     limit match_count;
 $$;
