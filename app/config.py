@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     llm_model: str = "claude-sonnet-4-6"
     chunk_size: int = 500
     chunk_overlap: int = 50
-    retrieval_top_k: int = 20
+    retrieval_top_k: int = 40
     rerank_top_n: int = 8
 
     model_config = {"env_file": ".env"}

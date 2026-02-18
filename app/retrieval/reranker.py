@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from typing import Any
 
 import cohere
@@ -23,12 +24,7 @@ class CohereReranker:
             return []
 
         docs = [c["content"] for c in chunks]
-        response = self.client.rerank(
-            query=query,
-            documents=docs,
-            top_n=self.top_n,
-            model=self.model,
-        )
+        response = self._rerank_with_retry(query, docs)
 
         reranked = []
         for result in response.results:
@@ -36,6 +32,21 @@ class CohereReranker:
             reranked.append(chunk)
 
         return reranked
+
+    def _rerank_with_retry(self, query: str, docs: list[str], max_retries: int = 3):
+        for attempt in range(max_retries + 1):
+            try:
+                return self.client.rerank(
+                    query=query,
+                    documents=docs,
+                    top_n=self.top_n,
+                    model=self.model,
+                )
+            except cohere.errors.too_many_requests_error.TooManyRequestsError:
+                if attempt == max_retries:
+                    raise
+                wait = 7 * (attempt + 1)
+                time.sleep(wait)
 
 
 class Reranker:
