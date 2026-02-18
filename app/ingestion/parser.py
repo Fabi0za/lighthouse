@@ -10,6 +10,29 @@ HEADER_TYPES = {"Title", "Section Header", "Header"}
 MIN_BLOCK_LENGTH = 10  # Skip blocks shorter than this (OCR artefacts, icons)
 
 
+def _is_table_block(text: str) -> bool:
+    """Check if a text block looks like a Markdown table."""
+    return "|" in text and text.strip().startswith("|")
+
+
+def _join_blocks(blocks: list[str]) -> str:
+    """Join content blocks, preserving newlines for Markdown tables."""
+    if not blocks:
+        return ""
+    parts: list[str] = []
+    for block in blocks:
+        if _is_table_block(block):
+            # Ensure table blocks are separated by newlines
+            parts.append("\n" + block + "\n")
+        else:
+            parts.append(block)
+    # Join prose blocks with space, then clean up extra whitespace
+    result = " ".join(parts)
+    # Normalize multiple newlines
+    result = re.sub(r"\n{3,}", "\n\n", result)
+    return result.strip()
+
+
 def _html_table_to_markdown(html: str) -> str:
     """Convert HTML table markup in a string to Markdown tables.
 
@@ -156,7 +179,7 @@ class ReductoParser:
                 if current_content:
                     sections.append({
                         "title": current_title,
-                        "content": " ".join(current_content),
+                        "content": _join_blocks(current_content),
                         "page": current_page,
                     })
                     current_content = []
@@ -172,7 +195,7 @@ class ReductoParser:
         if current_content:
             sections.append({
                 "title": current_title,
-                "content": " ".join(current_content),
+                "content": _join_blocks(current_content),
                 "page": current_page,
             })
 

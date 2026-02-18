@@ -81,7 +81,7 @@ async def replace_document(doc_id_str: str, pdf_path: str) -> None:
 
     # 4. Chunk
     chunker = Chunker(chunk_size=settings.chunk_size, chunk_overlap=settings.chunk_overlap)
-    chunks = chunker.chunk_sections(sections)
+    chunks = chunker.chunk_sections(sections, doc_title=title)
     print(f"Created {len(chunks)} chunks.")
 
     # 5. Embed

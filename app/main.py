@@ -100,7 +100,7 @@ def create_app(
 
             db.update_document(uuid.UUID(doc_id), {"raw_reducto_output": raw_output})
 
-            chunks = chunker.chunk_sections(sections)
+            chunks = chunker.chunk_sections(sections, doc_title=title)
 
             texts = [c.content for c in chunks]
             embeddings = await embedder.embed_texts(texts)
