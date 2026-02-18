@@ -43,6 +43,7 @@ class LLMClient:
             json={
                 "model": self.model,
                 "max_tokens": 4096,
+                "temperature": 0,
                 "system": system_prompt,
                 "messages": [{"role": "user", "content": user_prompt}],
             },
@@ -56,6 +57,7 @@ class LLMClient:
             "/chat/completions",
             json={
                 "model": self.model,
+                "temperature": 0,
                 "messages": [
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt},
