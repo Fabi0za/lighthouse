@@ -71,4 +71,6 @@ class QueryPipeline:
             "sources": formatted["sources"],
             "confidence": formatted["confidence"],
             "log_id": str(log_id),
+            "retrieved_chunks": retrieved_chunks,
+            "reranked_chunks": reranked_chunks,
         }

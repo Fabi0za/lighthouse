@@ -37,6 +37,8 @@ def mock_deps():
         "sources": [{"document_title": "Manual", "section": "Wiring", "page": 5}],
         "confidence": "high",
         "log_id": str(uuid.uuid4()),
+        "retrieved_chunks": [{"document_id": str(uuid.uuid4()), "content": "chunk"}],
+        "reranked_chunks": [{"document_id": str(uuid.uuid4()), "content": "chunk"}],
     }
 
     return {"db": db, "pipeline": pipeline}
