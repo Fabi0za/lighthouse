@@ -157,3 +157,14 @@ Key iterations that moved metrics (55 questions, 5 PDFs):
 | 19 | Second eval fact correction | 94.5% | 100% | ~84% |
 
 Changes that were tested and reverted (no improvement): hybrid search (BM25+RRF), prompt tuning, Sonnet 4.6, table reformatting at prompt level.
+
+## Design notes: metadata in retrieval
+
+Chunks carry metadata (`doc_type`, `grid_provider`, `hierarchy_priority`) but this metadata is **not used for filtering during retrieval**. The Postgres `match_document_chunks` function ranks all chunks purely by cosine similarity — no `WHERE` clause.
+
+Where metadata actually gets used:
+- **LLM prompt** — each chunk is rendered with its type, priority, and source info so the LLM can prefer higher-priority documents when sources conflict
+- **Response formatting** — `document_title`, `section_title`, `page_number` build the citation list
+- **Query parser** — detects grid provider names in the question (e.g. "Provider A"), but the detected filter is currently not passed to the search layer
+
+**Why not pre-filter?** There's a tradeoff. Hard filtering (e.g. `WHERE grid_provider = 'Provider A'`) would miss cross-document context — a question like "What does Provider A require differently from the NIN standard?" needs chunks from both. Soft boosting in the reranker is safer but risks losing provider-specific chunks if they score low and get cut off by `top_k`. A hybrid approach (retrieve N unfiltered + N filtered, dedupe) would get the best of both but adds complexity. For now, the broad retrieval with `top_k=40` + neural reranking handles this well enough.
