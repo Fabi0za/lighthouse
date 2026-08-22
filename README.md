@@ -102,11 +102,11 @@ python scripts/test_ingest.py <pdf_path> [title] [doc_type] [priority]
 # Query the system
 python scripts/test_query.py "Your question here"
 
-# Compare LLM models on failing questions
-python scripts/test_models.py
+# Compare LLM models (all questions, or a subset by ID)
+python scripts/test_models.py [question_id ...]
 
-# Test Cohere reranker on hard questions
-python scripts/test_cohere_rerank.py
+# Compare rule-based vs Cohere reranking
+python scripts/test_cohere_rerank.py [question_id ...]
 ```
 
 ## Tests
