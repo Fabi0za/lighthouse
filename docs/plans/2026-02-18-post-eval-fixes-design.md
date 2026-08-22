@@ -8,7 +8,7 @@
 First eval run (90% refusal accuracy, 100% retrieval recall) revealed three issues:
 
 1. **Language inconsistency** — LLM sometimes responds in English despite German questions and German source documents
-2. **False refusals** — Q5 (Provider A Netzkostenbeitrag) and Q7 (Batteriemodule max.) were incorrectly refused despite correct chunks being retrieved. The refusal instruction is too conservative.
+2. **False refusals** — two questions (Netzkostenbeitrag, max. Batteriemodule) were incorrectly refused despite correct chunks being retrieved. The refusal instruction is too conservative.
 3. **German refusal detection gap** — Q8 hedged in German ("nicht genug Informationen") but the eval metric only checks English refusal phrases, so it wasn't caught.
 
 ## Changes

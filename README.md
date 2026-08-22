@@ -28,6 +28,10 @@ User Question → Query Parser → Vector Search (top-40) → Cohere Rerank (top
 
 Evaluated with LLM-as-judge (GPT-4o-mini) against required facts per question.
 
+The evaluated question set was built from a private document corpus and is not
+included here. `scripts/seed_eval_questions.py` ships a small set of generic
+example questions instead — swap in your own to reproduce the workflow.
+
 ## Tech stack
 
 - **Python 3.11** / FastAPI
