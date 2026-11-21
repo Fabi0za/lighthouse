@@ -1,6 +1,6 @@
 # Changelog
 
-Each entry: what changed and why, then the evidence.
+Each entry: what changed and why, then the evidence. Measurements live in [baseline.md](baseline.md).
 
 ## 2026-11-21
 
@@ -19,6 +19,6 @@ Each entry: what changed and why, then the evidence.
 - **Add `corpus.yaml` (path, title, issuer, level, scope, source_url per document).** One declared source of document metadata; level and scope map to the existing `doc_type`, `hierarchy_priority` and `grid_provider` columns.
   Evidence: titles, issuers and versions were read from each PDF's first pages; the `doc_type` strings come from the original design doc.
 - **Add `scripts/load_corpus.py`.** Repeatable, idempotent load through the same steps as `POST /ingest`: skips completed documents, reloads partial ones, honours `max_pages`.
-  Evidence: 6 loader tests; 83/83 tests pass; a dry run against the empty database lists all 10 documents to load.
+  Evidence: 6 loader tests; a second run after a rate-limit failure skipped 9 documents and reloaded the 2 failed ones, with no duplicates.
 - **Add BKW Vorgaben V1.2 next to V1.3 as a separate document.** Reproduces the case of a new version published under a new name while the old one stays online.
   Evidence: the V1.2 cover reads "Version V1.2, valid from 1 March 2025"; the V1.3 cover reads "Ersetzt V1.2"; the text differs in section 4.
