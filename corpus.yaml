@@ -1,0 +1,83 @@
+# Document corpus for Lighthouse.
+# Paths are relative to the repo root. data/ itself is gitignored.
+# level: national | operator. scope: operator name for operator documents, null for national.
+# source_url: left empty where the publishing address is not known.
+# Loader mapping onto the existing documents table:
+#   level national -> doc_type general_regulation, hierarchy_priority 1
+#   level operator -> doc_type grid_provider_rule, hierarchy_priority 2
+#   scope -> grid_provider. issuer and source_url have no column and stay here only.
+
+documents:
+  # --- National (VSE industry recommendations) ---
+  - path: "data/Werkvorschriften CH (WV - CH 2025).pdf"
+    title: "Werkvorschriften CH (WV – CH 2025): Technische Anschlussbedingungen (TAB)"
+    issuer: "VSE"
+    level: national
+    scope: null
+    source_url: ""
+
+  - path: "data/NA:EEA-NE7 - CH 2025.pdf"
+    title: "NA/EEA-NE7 – CH 2025: Netzanschluss für Energieerzeugungsanlagen an das Niederspannungsnetz"
+    issuer: "VSE"
+    level: national
+    scope: null
+    source_url: ""
+
+  - path: "data/Regelung der Einspeisung von Photovoltaikanlagen (NRE - CH 2025).pdf"
+    title: "NRE – CH 2025: Richtlinie für die netzdienliche Regelung der Einspeisung von Photovoltaikanlagen"
+    issuer: "VSE"
+    level: national
+    scope: null
+    source_url: ""
+
+  - path: "data/BKW/2026-fd-netzdienliche-einspeiseregelung.pdf"
+    title: "Netzdienliche Einspeiseregelung: Neue Regeln bei der Einspeisung von Solarstrom (Merkblatt)"
+    issuer: "VSE / Verein Smart Grid Schweiz (VSGS)"
+    level: national
+    scope: null
+    source_url: ""
+
+  # --- Operator: BKW ---
+  - path: "data/BKW/20250521_DE_Vorgaben_BKW_V1.3.pdf"
+    title: "Vorgaben an Niederspannungs-Installationen im Verteilnetz der BKW (V1.3, gültig ab 21.05.2025)"
+    issuer: "BKW Energie AG"
+    level: operator
+    scope: "BKW"
+    source_url: "https://www.bkw.ch/fileadmin/user_upload/03_Energie/03_04_Stromnetz/Netzanschluss/BKW_Fachpartner/20250521_DE_Vorgaben_BKW_V1.3.pdf"
+
+  - path: "data/BKW/Technische_Anforderungen_zwecks_Notfallsteuerung_DE.pdf"
+    title: "Technische Anforderungen zwecks Notfallsteuerung (V1.1, gültig ab 01.02.2025)"
+    issuer: "BKW Energie AG"
+    level: operator
+    scope: "BKW"
+    source_url: ""
+
+  - path: "data/BKW/Faktenblatt_QU-Regelung_A4_DE_def.pdf"
+    title: "Faktenblatt Wechselrichter-Einstellung Q(U)-Regelung"
+    issuer: "BKW Energie AG"
+    level: operator
+    scope: "BKW"
+    source_url: ""
+
+  - path: "data/BKW/WV_BEJUSO_2025.pdf"
+    title: "Werkvorschriften (WV) TAB BE/JU/SO 2025"
+    issuer: "Verteilnetzbetreiber der Kantone Bern, Jura und Solothurn"
+    level: operator
+    scope: "BKW"
+    source_url: ""
+    # Only pages 1-4 are to be loaded; page 1 reads "Seite 1 von 4".
+
+  # --- Operator: EKZ ---
+  - path: "data/EKZ/technische-bedingungen-fuer-den-parallelbetrieb-von-eea-fuer-internet-2026.pdf"
+    title: "Technische Bedingungen für den Parallelbetrieb von EEA und elektrischen Energiespeichern mit dem EKZ-Netz (Stand Januar 2026)"
+    issuer: "EKZ"
+    level: operator
+    scope: "EKZ"
+    source_url: ""
+
+  - path: "data/EKZ/wv-ch-2025-spezielle-bestimmungen-ekz-2026-01.pdf"
+    title: "Werkvorschriften CH 2025: Spezielle Bestimmungen der EKZ (Version April 2026)"
+    issuer: "EKZ"
+    level: operator
+    scope: "EKZ"
+    source_url: ""

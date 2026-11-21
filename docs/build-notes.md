@@ -33,6 +33,8 @@ Working notes for the build. Not for the README.
 - Whether a capable model picks the newer version unaided when both are found.
 - Whole documents or cut pieces as model input.
 - Whether long documents crowd out short ones in search, and whether searching per level of authority helps.
+- A document can apply to several scopes (BE/JU/SO rules cover many operators); one scope field per document cannot express that.
+- issuer, level and source_url have no column yet; they live only in corpus.yaml until the store is remodelled.
 
 ## What the surrounding system must provide
 

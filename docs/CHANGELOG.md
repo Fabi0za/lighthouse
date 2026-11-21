@@ -16,3 +16,5 @@ Each entry: what changed and why, then the evidence.
   Evidence: Cohere docs list 1536 among its dimensions (default 2048); a live call returns 1536 for documents and queries.
 - **Grant `service_role` access at the end of `supabase/schema.sql`.** On a fresh project the secret key could not read tables created in the SQL editor.
   Evidence: before the grants, 6/6 tables and 2/2 search functions returned 42501 "permission denied"; afterwards all were readable and a test insert and delete succeeded.
+- **Add `corpus.yaml` (path, title, issuer, level, scope, source_url per document).** One declared source of document metadata; level and scope map to the existing `doc_type`, `hierarchy_priority` and `grid_provider` columns.
+  Evidence: titles, issuers and versions were read from each PDF's first pages; the `doc_type` strings come from the original design doc.
