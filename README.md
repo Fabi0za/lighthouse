@@ -26,7 +26,7 @@ User Question → Query Parser → Vector Search (top-40) → Cohere Rerank (top
 | Retrieval recall | 100% |
 | Answer correctness | 84% |
 
-Evaluated with LLM-as-judge (GPT-4o-mini at the time, with OpenAI `text-embedding-3-small` embeddings) against required facts per question. The judge is now Claude Haiku 5.5 and embeddings are Cohere `embed-v4.0`; these results have not been re-measured since.
+Evaluated with LLM-as-judge (GPT-4o-mini at the time, with OpenAI `text-embedding-3-small` embeddings) against required facts per question. The judge is now Claude Haiku 5.5 and embeddings are Cohere `embed-v5.0-pro`; these results have not been re-measured since.
 
 The evaluated question set was built from a private document corpus and is not
 included here. `scripts/seed_eval_questions.py` ships a small set of generic
@@ -37,7 +37,7 @@ example questions instead — swap in your own to reproduce the workflow.
 - **Python 3.11** / FastAPI
 - **Supabase** (PostgreSQL + pgvector with HNSW index)
 - **Reducto API** for PDF parsing
-- **Cohere** for embeddings (`embed-v4.0`, 1536d)
+- **Cohere** for embeddings (`embed-v5.0-pro`, 1536d via `output_dimension`)
 - **Anthropic** for the LLM (`claude-sonnet-4-6`)
 - **Cohere** for neural re-ranking (`rerank-v3.5`)
 - **Claude Haiku 5.5** as the eval judge

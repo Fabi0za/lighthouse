@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     openai_api_key: str = ""  # only needed if LLM_PROVIDER=openai
     anthropic_api_key: str = ""
     cohere_api_key: str = ""
-    embedding_model: str = "embed-v4.0"
+    embedding_model: str = "embed-v5.0-pro"
     embedding_dimensions: int = 1536
     llm_provider: str = "anthropic"
     llm_model: str = "claude-sonnet-4-6"

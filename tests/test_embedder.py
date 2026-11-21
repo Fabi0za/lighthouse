@@ -12,11 +12,11 @@ def _response(n: int, value: float = 0.1):
 
 @pytest.fixture
 def embedder():
-    return Embedder(api_key="test-key", model="embed-v4.0", dimensions=1536)
+    return Embedder(api_key="test-key", model="embed-v5.0-pro", dimensions=1536)
 
 
 def test_embedder_init(embedder):
-    assert embedder.model == "embed-v4.0"
+    assert embedder.model == "embed-v5.0-pro"
     assert embedder.dimensions == 1536
 
 
@@ -28,7 +28,7 @@ async def test_embed_texts_uses_search_document(embedder):
     assert len(result) == 2 and len(result[0]) == 1536
     kwargs = mock.call_args.kwargs
     assert kwargs["input_type"] == "search_document"
-    assert kwargs["model"] == "embed-v4.0"
+    assert kwargs["model"] == "embed-v5.0-pro"
     assert kwargs["output_dimension"] == 1536
     assert kwargs["embedding_types"] == ["float"]
 

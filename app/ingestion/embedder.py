@@ -9,7 +9,7 @@ MAX_BATCH = 96
 class Embedder:
     """Cohere embeddings. Documents and queries use different input_type values."""
 
-    def __init__(self, api_key: str, model: str = "embed-v4.0", dimensions: int = 1536):
+    def __init__(self, api_key: str, model: str = "embed-v5.0-pro", dimensions: int = 1536):
         self.api_key = api_key
         self.model = model
         self.dimensions = dimensions
