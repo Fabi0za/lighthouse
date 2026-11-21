@@ -115,8 +115,25 @@ python scripts/test_cohere_rerank.py [question_id ...]
 
 ## Tests
 
+Unit tests use mocks and need nothing else:
+
 ```bash
-pytest tests/ -v
+.venv/bin/pytest -q
+```
+
+The schema tests in `tests/db/` run against a real Postgres with pgvector and are skipped unless `TEST_DATABASE_URL` is set. Each run creates a throwaway database, applies `supabase/schema.sql` and drops it afterwards.
+
+One-time setup (macOS, Homebrew; pgvector is built for Postgres 18, not 17):
+
+```bash
+brew install postgresql@18 pgvector
+brew services start postgresql@18
+```
+
+Full suite, including the database tests:
+
+```bash
+TEST_DATABASE_URL=postgresql://localhost/postgres .venv/bin/pytest -q
 ```
 
 ## Project structure

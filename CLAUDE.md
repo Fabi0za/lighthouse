@@ -15,7 +15,10 @@ This repository is public-facing. Keep history and files clean.
 - The body says why the change was made and what evidence supports it.
 - No references to chat steps or assistant prompts; describe the change, not who asked for it.
 - One logical change per commit.
-- Tests pass before every commit: `pytest -q`.
+- Tests pass before every commit, including the database tests:
+  `TEST_DATABASE_URL=postgresql://localhost/postgres .venv/bin/pytest -q`
+  (local Postgres 18 with pgvector: `brew services start postgresql@18`; see README, Tests).
+  Without the variable the database tests are skipped, which does not count as passing.
 
 ## Changelog
 
