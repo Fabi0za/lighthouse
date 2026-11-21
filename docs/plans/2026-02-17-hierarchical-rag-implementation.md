@@ -143,7 +143,7 @@ def test_settings():
 
 **Step 6: Install dependencies**
 
-Run: `cd /path/to/voltara-rag && python -m venv .venv && source .venv/bin/activate && pip install -e ".[dev]"`
+Run: `cd /path/to/lighthouse && python -m venv .venv && source .venv/bin/activate && pip install -e ".[dev]"`
 Expected: All packages installed successfully.
 
 **Step 7: Run a sanity check**

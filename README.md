@@ -1,4 +1,4 @@
-# Voltara RAG
+# Lighthouse
 
 Hierarchical RAG system for electrical installation technical documents (German). Field engineers ask natural language questions and get precise, cited answers that respect document hierarchy — grid provider rules override general regulations.
 
