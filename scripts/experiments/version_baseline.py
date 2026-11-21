@@ -100,7 +100,7 @@ async def main():
     embedder = Embedder(s.cohere_api_key, s.embedding_model, s.embedding_dimensions)
     llm = LLMClient(provider=s.llm_provider, api_key=s.anthropic_api_key, model=s.llm_model)
     parts = (
-        QueryParser(known_providers=db.get_known_providers()),
+        QueryParser(known_providers=db.get_known_scopes()),
         VectorSearch(db=db, embedder=embedder, top_k=s.retrieval_top_k),
         CohereReranker(api_key=s.cohere_api_key, top_n=s.rerank_top_n),
         llm,

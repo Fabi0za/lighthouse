@@ -6,28 +6,19 @@ from typing import Any
 from pydantic import BaseModel
 
 
-class DocumentCreate(BaseModel):
-    title: str
-    doc_type: str
-    grid_provider: str | None = None
-    hierarchy_priority: int
-
-
 class DocumentResponse(BaseModel):
+    """One version of a source."""
+
     id: uuid.UUID
+    source_id: uuid.UUID
+    status: str
     title: str
-    doc_type: str
-    grid_provider: str | None = None
-    hierarchy_priority: int
     ingestion_status: str
     file_path: str | None = None
 
 
 class DocumentUpdate(BaseModel):
     title: str | None = None
-    doc_type: str | None = None
-    grid_provider: str | None = None
-    hierarchy_priority: int | None = None
 
 
 class ChunkMetadata(BaseModel):
@@ -35,9 +26,6 @@ class ChunkMetadata(BaseModel):
     section_title: str
     page_number: int
     chunk_index: int
-    doc_type: str
-    grid_provider: str | None = None
-    hierarchy_priority: int
 
 
 class QueryRequest(BaseModel):

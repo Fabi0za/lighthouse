@@ -45,7 +45,7 @@ async def main():
         model=settings.embedding_model,
         dimensions=settings.embedding_dimensions,
     )
-    known_providers = db.get_known_providers()
+    known_providers = db.get_known_scopes()
     query_parser = QueryParser(known_providers=known_providers)
     vector_search = VectorSearch(db=db, embedder=embedder, top_k=settings.retrieval_top_k)
     reranker = Reranker(top_n=settings.rerank_top_n)

@@ -36,7 +36,7 @@ async def main():
     )
     llm = LLMClient(provider=settings.llm_provider, api_key=llm_api_key, model=settings.llm_model)
 
-    known_providers = db.get_known_providers()
+    known_providers = db.get_known_scopes()
     print(f"Known providers: {known_providers}")
 
     pipeline = QueryPipeline(

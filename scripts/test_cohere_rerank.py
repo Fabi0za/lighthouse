@@ -60,7 +60,7 @@ async def main():
         model=settings.embedding_model,
         dimensions=settings.embedding_dimensions,
     )
-    query_parser = QueryParser(known_providers=db.get_known_providers())
+    query_parser = QueryParser(known_providers=db.get_known_scopes())
     vector_search = VectorSearch(db=db, embedder=embedder, top_k=settings.retrieval_top_k)
     rule_reranker = Reranker(top_n=settings.rerank_top_n)
     system_prompt = build_system_prompt()
