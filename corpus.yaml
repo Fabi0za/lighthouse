@@ -46,6 +46,14 @@ documents:
     scope: "BKW"
     source_url: "https://www.bkw.ch/fileadmin/user_upload/03_Energie/03_04_Stromnetz/Netzanschluss/BKW_Fachpartner/20250521_DE_Vorgaben_BKW_V1.3.pdf"
 
+  # Superseded by V1.3 but still online at its old address; loaded on purpose as a separate document.
+  - path: "data/BKW/DE_Vorgaben_BKW_V1.2.pdf"
+    title: "Vorgaben an Niederspannungs-Installationen im Verteilnetz der BKW (V1.2, gültig ab 01.03.2025)"
+    issuer: "BKW Energie AG"
+    level: operator
+    scope: "BKW"
+    source_url: "https://www.bkw.ch/fileadmin/user_upload/03_Energie/03_04_Stromnetz/Netzanschluss/BKW_Fachpartner/DE_Vorgaben_BKW_V1.2.pdf"
+
   - path: "data/BKW/Technische_Anforderungen_zwecks_Notfallsteuerung_DE.pdf"
     title: "Technische Anforderungen zwecks Notfallsteuerung (V1.1, gültig ab 01.02.2025)"
     issuer: "BKW Energie AG"
