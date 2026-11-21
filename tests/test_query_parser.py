@@ -29,11 +29,11 @@ def test_filters_dict():
     parser = QueryParser(known_providers=["GridCo"])
     result = parser.parse("GridCo compliance requirements")
     filters = result.to_filters()
-    assert filters["grid_provider"] == "GridCo"
+    assert filters == {"scope": "GridCo"}
 
 
 def test_filters_empty_when_no_match():
     parser = QueryParser(known_providers=["GridCo"])
     result = parser.parse("General wiring standards")
     filters = result.to_filters()
-    assert "grid_provider" not in filters
+    assert filters == {}

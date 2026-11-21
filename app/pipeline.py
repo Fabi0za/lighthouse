@@ -64,6 +64,7 @@ class QueryPipeline:
             formatted_answer=formatted,
             model_used=self.llm.model,
             latency_ms=latency_ms,
+            document_ids=list(dict.fromkeys(c["document_id"] for c in reranked_chunks)),
         )
 
         return {

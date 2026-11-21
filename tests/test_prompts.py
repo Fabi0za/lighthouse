@@ -15,24 +15,25 @@ def test_user_prompt_contains_question_and_context():
             "content": "Wire component X to terminal Y.",
             "section_title": "Wiring",
             "page_number": 5,
-            "doc_type": "product_manual",
+            "level": "operator",
             "document_title": "Manual A",
-            "hierarchy_priority": 5,
+            "authority_rank": 2,
         },
         {
             "content": "General wiring standards require grounding.",
             "section_title": "Standards",
             "page_number": 2,
-            "doc_type": "general_regulation",
+            "level": "national",
             "document_title": "Regulations",
-            "hierarchy_priority": 1,
+            "authority_rank": 1,
         },
     ]
     prompt = build_user_prompt("How do I wire component X?", chunks)
     assert "How do I wire component X?" in prompt
     assert "Wire component X to terminal Y." in prompt
     assert "Manual A" in prompt
-    assert "priority: 5" in prompt.lower() or "Priority: 5" in prompt
+    assert "(Type: operator, Priority: 2)" in prompt
+    assert "(Type: national, Priority: 1)" in prompt
 
 
 def test_user_prompt_empty_context():

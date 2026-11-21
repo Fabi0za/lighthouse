@@ -154,9 +154,6 @@ class DatabaseClient:
             "log_answer", {"p_log": log_data, "p_document_ids": list(document_ids)}
         ).execute().data
 
-    def insert_query_log(self, log_data: dict[str, Any]) -> dict[str, Any]:
-        return self.client.table("query_logs").insert(log_data).execute().data[0]
-
     def get_query_log(self, log_id: uuid.UUID) -> dict[str, Any] | None:
         result = self.client.table("query_logs").select("*").eq("id", str(log_id)).execute()
         return result.data[0] if result.data else None

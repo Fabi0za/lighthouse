@@ -12,7 +12,7 @@ def mock_deps():
     query_parser.parse.return_value = MagicMock(
         original_question="How do I wire X for GridCo?",
         detected_provider="GridCo",
-        to_filters=lambda: {"grid_provider": "GridCo"},
+        to_filters=lambda: {"scope": "GridCo"},
     )
 
     vector_search = AsyncMock()
@@ -21,10 +21,11 @@ def mock_deps():
             "content": "Wire X to terminal Y.",
             "section_title": "Wiring",
             "page_number": 5,
-            "doc_type": "product_manual",
+            "document_id": "d1",
+            "level": "operator",
             "document_title": "Manual A",
-            "grid_provider": "GridCo",
-            "hierarchy_priority": 5,
+            "scopes": ["GridCo"],
+            "authority_rank": 2,
             "similarity": 0.9,
         },
     ]
@@ -35,10 +36,11 @@ def mock_deps():
             "content": "Wire X to terminal Y.",
             "section_title": "Wiring",
             "page_number": 5,
-            "doc_type": "product_manual",
+            "document_id": "d1",
+            "level": "operator",
             "document_title": "Manual A",
-            "grid_provider": "GridCo",
-            "hierarchy_priority": 5,
+            "scopes": ["GridCo"],
+            "authority_rank": 2,
             "similarity": 0.9,
             "rerank_score": 1.2,
         },
@@ -89,3 +91,15 @@ async def test_pipeline_calls_all_steps(mock_deps):
     mock_deps["llm"].generate.assert_called_once()
     mock_deps["formatter"].format.assert_called_once()
     mock_deps["logger"].log.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_pipeline_logs_distinct_versions_of_the_top_chunks(mock_deps):
+    mock_deps["reranker"].rerank.return_value = [
+        {"content": "a", "document_id": "d1", "document_title": "A"},
+        {"content": "b", "document_id": "d1", "document_title": "A"},
+        {"content": "c", "document_id": "d2", "document_title": "B"},
+    ]
+    pipeline = QueryPipeline(**mock_deps)
+    await pipeline.run("q")
+    assert mock_deps["logger"].log.call_args.kwargs["document_ids"] == ["d1", "d2"]

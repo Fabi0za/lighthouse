@@ -6,18 +6,18 @@ from app.retrieval.reranker import Reranker
 def _chunk(
     content="test",
     similarity=0.8,
-    doc_type="general_regulation",
-    grid_provider=None,
-    hierarchy_priority=1,
+    level="national",
+    scopes=(),
+    authority_rank=1,
 ):
     return {
         "id": str(uuid.uuid4()),
         "content": content,
         "section_title": "Section",
         "page_number": 1,
-        "doc_type": doc_type,
-        "grid_provider": grid_provider,
-        "hierarchy_priority": hierarchy_priority,
+        "level": level,
+        "scopes": list(scopes),
+        "authority_rank": authority_rank,
         "similarity": similarity,
     }
 
@@ -25,8 +25,8 @@ def _chunk(
 def test_reranker_boosts_matching_provider():
     reranker = Reranker(top_n=2)
     chunks = [
-        _chunk(content="general rule", similarity=0.9, hierarchy_priority=1),
-        _chunk(content="provider specific", similarity=0.7, grid_provider="GridCo", hierarchy_priority=5),
+        _chunk(content="general rule", similarity=0.9, authority_rank=1),
+        _chunk(content="provider specific", similarity=0.7, scopes=["GridCo"], authority_rank=5),
     ]
     result = reranker.rerank(chunks, detected_provider="GridCo")
     assert result[0]["content"] == "provider specific"
@@ -35,8 +35,8 @@ def test_reranker_boosts_matching_provider():
 def test_reranker_applies_hierarchy_priority():
     reranker = Reranker(top_n=2)
     chunks = [
-        _chunk(content="low priority", similarity=0.85, hierarchy_priority=1),
-        _chunk(content="high priority", similarity=0.80, hierarchy_priority=10),
+        _chunk(content="low priority", similarity=0.85, authority_rank=1),
+        _chunk(content="high priority", similarity=0.80, authority_rank=10),
     ]
     result = reranker.rerank(chunks, detected_provider=None)
     assert result[0]["content"] == "high priority"
@@ -113,3 +113,21 @@ def test_reranker_diversity_zero_penalty_behaves_like_before():
     # Pure score order — D should NOT make it in
     contents = [r["content"] for r in result]
     assert contents == ["A", "B", "C"]
+
+
+def test_reranker_boosts_when_any_scope_matches():
+    reranker = Reranker(top_n=2, diversity_penalty=0.0)
+    chunks = [
+        _chunk(content="unscoped", similarity=0.9),
+        _chunk(content="multi-scope", similarity=0.7, scopes=["BKW", "X"]),
+    ]
+    assert reranker.rerank(chunks, detected_provider="X")[0]["content"] == "multi-scope"
+
+
+def test_reranker_no_boost_without_scopes():
+    reranker = Reranker(top_n=2, diversity_penalty=0.0)
+    chunks = [
+        _chunk(content="unscoped high", similarity=0.9),
+        _chunk(content="unscoped low", similarity=0.7),
+    ]
+    assert reranker.rerank(chunks, detected_provider="X")[0]["content"] == "unscoped high"

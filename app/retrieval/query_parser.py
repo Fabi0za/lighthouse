@@ -11,7 +11,7 @@ class ParsedQuery:
     def to_filters(self) -> dict[str, str]:
         filters = {}
         if self.detected_provider:
-            filters["grid_provider"] = self.detected_provider
+            filters["scope"] = self.detected_provider
         return filters
 
 

@@ -76,10 +76,10 @@ class Reranker:
         for chunk in chunks:
             score = chunk.get("similarity", 0.0)
 
-            if detected_provider and chunk.get("grid_provider") == detected_provider:
+            if detected_provider and detected_provider in (chunk.get("scopes") or []):
                 score += self.provider_boost
 
-            score += chunk.get("hierarchy_priority", 0) * self.hierarchy_weight
+            score += chunk.get("authority_rank", 0) * self.hierarchy_weight
 
             scored.append({**chunk, "rerank_score": score})
 

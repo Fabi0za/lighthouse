@@ -29,12 +29,12 @@ No relevant context documents were found. State that you have no relevant contex
         title = chunk.get("document_title", "Unknown Document")
         section = chunk.get("section_title", "Unknown Section")
         page = chunk.get("page_number", "?")
-        priority = chunk.get("hierarchy_priority", 0)
-        doc_type = chunk.get("doc_type", "unknown")
+        priority = chunk.get("authority_rank", 0)
+        level = chunk.get("level", "unknown")
         content = chunk.get("content", "")
 
         context_parts.append(
-            f"[Source {i}] {title} — {section}, Page {page} (Type: {doc_type}, Priority: {priority})\n{content}"
+            f"[Source {i}] {title} — {section}, Page {page} (Type: {level}, Priority: {priority})\n{content}"
         )
 
     context_block = "\n\n---\n\n".join(context_parts)

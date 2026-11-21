@@ -21,12 +21,12 @@ def mock_pipeline():
 def mock_db():
     db = MagicMock()
     db.list_documents.return_value = [
-        {"id": str(uuid.uuid4()), "title": "Test Doc", "doc_type": "product_manual",
-         "hierarchy_priority": 5, "ingestion_status": "completed"}
+        {"id": str(uuid.uuid4()), "title": "Test Doc", "source_id": str(uuid.uuid4()),
+         "status": "current", "ingestion_status": "completed"}
     ]
     db.get_document.return_value = {
-        "id": str(uuid.uuid4()), "title": "Test Doc", "doc_type": "product_manual",
-        "hierarchy_priority": 5, "ingestion_status": "completed"
+        "id": str(uuid.uuid4()), "title": "Test Doc", "source_id": str(uuid.uuid4()),
+        "status": "current", "ingestion_status": "completed"
     }
     db.get_query_log.return_value = {
         "id": str(uuid.uuid4()), "question": "test?", "detected_filters": {},

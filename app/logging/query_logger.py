@@ -21,7 +21,9 @@ class QueryLogger:
         formatted_answer: dict[str, Any],
         model_used: str,
         latency_ms: int,
+        document_ids: list[str],
     ) -> uuid.UUID:
+        """Store the answer and the versions its top chunks came from, in one transaction."""
         log_data = {
             "question": question,
             "detected_filters": detected_filters,
@@ -33,5 +35,4 @@ class QueryLogger:
             "model_used": model_used,
             "latency_ms": latency_ms,
         }
-        result = self.db.insert_query_log(log_data)
-        return uuid.UUID(result["id"])
+        return uuid.UUID(str(self.db.log_answer(log_data, document_ids)))
