@@ -11,7 +11,8 @@ from app.main import create_app
 def mock_db():
     db = MagicMock()
     doc_id = str(uuid.uuid4())
-    db.insert_document.return_value = {"id": doc_id, "title": "Test", "ingestion_status": "pending"}
+    db.list_versions.return_value = []
+    db.hold_version.return_value = {"id": doc_id, "status": "pending", "flag_id": "f"}
     db.update_document.return_value = {"id": doc_id, "ingestion_status": "completed"}
     db.delete_chunks_for_document.return_value = None
     db.insert_chunks.return_value = None
@@ -55,17 +56,25 @@ def client(mock_db, mock_parser, mock_chunker, mock_embedder):
     return TestClient(app)
 
 
-def test_ingest_endpoint(client, mock_db, mock_parser):
+def test_ingest_endpoint_loads_a_version(client, mock_db):
     response = client.post(
         "/ingest",
-        data={
-            "title": "Test Document",
-            "doc_type": "product_manual",
-            "hierarchy_priority": "5",
-        },
+        data={"source_id": "src-1", "title": "Test Document (V2)", "address": "https://example.org/v2.pdf"},
         files={"file": ("test.pdf", b"fake pdf content", "application/pdf")},
     )
     assert response.status_code == 200
     data = response.json()
-    assert "id" in data
-    assert data["ingestion_status"] == "completed"
+    assert data["action"] == "promoted"
+    assert data["document_id"] == mock_db.hold_version.return_value["id"]
+    args = mock_db.hold_version.call_args.args
+    assert args[:4] == ("src-1", "Test Document (V2)", "https://example.org/v2.pdf", "test.pdf")
+    mock_db.promote_version.assert_called_once()
+
+
+def test_ingest_endpoint_rejects_old_fields(client):
+    response = client.post(
+        "/ingest",
+        data={"title": "T", "doc_type": "product_manual", "hierarchy_priority": "5"},
+        files={"file": ("test.pdf", b"x", "application/pdf")},
+    )
+    assert response.status_code == 422

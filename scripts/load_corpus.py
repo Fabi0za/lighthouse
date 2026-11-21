@@ -1,185 +1,166 @@
-"""Load every document listed in corpus.yaml through the existing ingestion pipeline.
+"""Load every source and version listed in corpus.yaml.
 
 Usage:
     python scripts/load_corpus.py [--corpus corpus.yaml] [--dry-run]
 
-Idempotent: a document whose file_path is already stored with ingestion_status
-"completed" is skipped. A document left behind by an interrupted run (any other
-status) is deleted, chunks included, and loaded again.
+Versions are identified by fingerprint, not by path (app/ingestion/versions.py):
+a file whose bytes are already stored is skipped, a file with new bytes but the
+same text is dismissed as repackaging, and new content is promoted to current,
+retiring the previous version. Each source's versions are loaded oldest first,
+as listed; after a failure, later versions of that source are not attempted,
+so an older version can never be promoted over a newer one.
 
-The steps mirror POST /ingest in app/main.py: parse (Reducto), chunk with the
-document title, embed (search_document), store document and chunks.
+Sources are matched by title: renaming a source title creates a new source.
 """
 from __future__ import annotations
 
 import argparse
 import asyncio
 import sys
-import tempfile
-import uuid
-from dataclasses import dataclass
+from collections import Counter
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
 
 import yaml
-from pypdf import PdfReader, PdfWriter
 
 from app.config import get_settings
 from app.ingestion.chunker import Chunker
 from app.ingestion.embedder import Embedder
+from app.ingestion.fingerprint import file_sha256
 from app.ingestion.parser import ReductoParser
+from app.ingestion.versions import first_pages, load_version  # noqa: F401 - first_pages re-exported
 from app.models.database import DatabaseClient
 
-LEVEL_MAPPING = {
-    "national": ("general_regulation", 1),
-    "operator": ("grid_provider_rule", 2),
-}
-REQUIRED_FIELDS = ("path", "title", "issuer", "level")
+AUTHORITY_RANK = {"national": 1, "operator": 2}
+SOURCE_FIELDS = ("title", "issuer", "level")
+VERSION_FIELDS = ("path", "title")
 
 
 @dataclass
-class CorpusEntry:
+class CorpusVersion:
     path: str
+    title: str
+    address: str | None
+    max_pages: int | None
+
+
+@dataclass
+class CorpusSource:
     title: str
     issuer: str
     level: str
-    scope: str | None
-    source_url: str
-    max_pages: int | None
+    scopes: list[str]
+    listing_address: str | None
+    versions: list[CorpusVersion] = field(default_factory=list)
 
     @property
-    def doc_type(self) -> str:
-        return LEVEL_MAPPING[self.level][0]
-
-    @property
-    def hierarchy_priority(self) -> int:
-        return LEVEL_MAPPING[self.level][1]
+    def authority_rank(self) -> int:
+        return AUTHORITY_RANK[self.level]
 
 
-def load_corpus(corpus_path: Path, repo_root: Path) -> list[CorpusEntry]:
+def load_corpus(corpus_path: Path, repo_root: Path) -> list[CorpusSource]:
     """Read and validate corpus.yaml. Raises ValueError listing every problem found."""
     data = yaml.safe_load(corpus_path.read_text(encoding="utf-8")) or {}
-    raw_entries = data.get("documents") or []
-    entries: list[CorpusEntry] = []
     problems: list[str] = []
-    seen: set[str] = set()
+    sources: list[CorpusSource] = []
+    seen_titles: set[str] = set()
+    seen_paths: set[str] = set()
 
-    for i, raw in enumerate(raw_entries, 1):
-        label = raw.get("path") or f"entry {i}"
-        missing = [f for f in REQUIRED_FIELDS if not raw.get(f)]
+    for i, raw in enumerate(data.get("sources") or [], 1):
+        label = raw.get("title") or f"source {i}"
+        missing = [f for f in SOURCE_FIELDS if not raw.get(f)]
         if missing:
             problems.append(f"{label}: missing {', '.join(missing)}")
             continue
-        if raw["level"] not in LEVEL_MAPPING:
-            problems.append(f"{label}: level must be one of {sorted(LEVEL_MAPPING)}")
+        if raw["level"] not in AUTHORITY_RANK:
+            problems.append(f"{label}: level must be one of {sorted(AUTHORITY_RANK)}")
             continue
-        if raw["level"] == "operator" and not raw.get("scope"):
-            problems.append(f"{label}: operator documents need a scope")
+        scopes = list(raw.get("scopes") or [])
+        if raw["level"] == "operator" and not scopes:
+            problems.append(f"{label}: operator sources need scopes")
             continue
-        if raw["path"] in seen:
-            problems.append(f"{label}: listed twice")
+        if raw["title"] in seen_titles:
+            problems.append(f"{label}: source title listed twice")
             continue
-        if not (repo_root / raw["path"]).is_file():
-            problems.append(f"{label}: file not found")
+        raw_versions = raw.get("versions") or []
+        if not raw_versions:
+            problems.append(f"{label}: no versions")
             continue
-        max_pages = raw.get("max_pages")
-        if max_pages is not None and (not isinstance(max_pages, int) or max_pages < 1):
-            problems.append(f"{label}: max_pages must be a positive integer")
-            continue
-        seen.add(raw["path"])
-        entries.append(
-            CorpusEntry(
-                path=raw["path"],
-                title=raw["title"],
-                issuer=raw["issuer"],
-                level=raw["level"],
-                scope=raw.get("scope"),
-                source_url=raw.get("source_url") or "",
-                max_pages=max_pages,
-            )
-        )
+
+        versions: list[CorpusVersion] = []
+        for j, rv in enumerate(raw_versions, 1):
+            vlabel = rv.get("path") or f"{label} version {j}"
+            vmissing = [f for f in VERSION_FIELDS if not rv.get(f)]
+            if vmissing:
+                problems.append(f"{vlabel}: missing {', '.join(vmissing)}")
+                continue
+            if rv["path"] in seen_paths:
+                problems.append(f"{vlabel}: listed twice")
+                continue
+            if not (repo_root / rv["path"]).is_file():
+                problems.append(f"{vlabel}: file not found")
+                continue
+            max_pages = rv.get("max_pages")
+            if max_pages is not None and (not isinstance(max_pages, int) or max_pages < 1):
+                problems.append(f"{vlabel}: max_pages must be a positive integer")
+                continue
+            seen_paths.add(rv["path"])
+            versions.append(CorpusVersion(
+                path=rv["path"], title=rv["title"],
+                address=rv.get("address") or None, max_pages=max_pages,
+            ))
+
+        seen_titles.add(raw["title"])
+        sources.append(CorpusSource(
+            title=raw["title"], issuer=raw["issuer"], level=raw["level"], scopes=scopes,
+            listing_address=raw.get("listing_address") or None, versions=versions,
+        ))
 
     if problems:
         raise ValueError("corpus.yaml has problems:\n  " + "\n  ".join(problems))
-    return entries
+    return sources
 
 
-def plan(entries: list[CorpusEntry], existing: list[dict[str, Any]]) -> list[tuple[CorpusEntry, str, list[str]]]:
-    """Decide per entry: 'skip' (already completed), 'reload' (stale rows to delete) or 'load'.
+def plan(
+    sources: list[CorpusSource], known_file_hashes: set[str], repo_root: Path
+) -> list[tuple[CorpusSource, CorpusVersion, str]]:
+    """For --dry-run: 'skip' when the file's bytes are already a stored version, else 'load'.
 
-    Returns (entry, action, ids_to_delete).
+    Whether a 'load' ends as promoted or dismissed is only known after parsing.
     """
-    by_path: dict[str, list[dict[str, Any]]] = {}
-    for doc in existing:
-        by_path.setdefault(doc.get("file_path"), []).append(doc)
-
-    decisions = []
-    for entry in entries:
-        docs = by_path.get(entry.path, [])
-        if any(d.get("ingestion_status") == "completed" for d in docs):
-            decisions.append((entry, "skip", []))
-        elif docs:
-            decisions.append((entry, "reload", [d["id"] for d in docs]))
-        else:
-            decisions.append((entry, "load", []))
-    return decisions
+    return [
+        (s, v, "skip" if file_sha256(repo_root / v.path) in known_file_hashes else "load")
+        for s in sources
+        for v in s.versions
+    ]
 
 
-def first_pages(src: Path, max_pages: int, out_dir: Path) -> Path:
-    """Write the first max_pages pages of src to out_dir, keeping the file name."""
-    reader = PdfReader(str(src))
-    writer = PdfWriter()
-    for page in reader.pages[:max_pages]:
-        writer.add_page(page)
-    out = out_dir / src.name
-    with open(out, "wb") as f:
-        writer.write(f)
-    return out
-
-
-async def ingest(entry: CorpusEntry, repo_root: Path, db, parser, chunker, embedder) -> int:
-    """Run one document through the pipeline. Returns the number of chunks stored."""
-    src = repo_root / entry.path
-    doc = db.insert_document(
-        title=entry.title,
-        doc_type=entry.doc_type,
-        hierarchy_priority=entry.hierarchy_priority,
-        file_path=entry.path,
-        grid_provider=entry.scope,
-    )
-    doc_id = doc["id"]
-    try:
-        db.update_document(uuid.UUID(doc_id), {"ingestion_status": "processing"})
-        with tempfile.TemporaryDirectory() as tmp:
-            parse_path = first_pages(src, entry.max_pages, Path(tmp)) if entry.max_pages else src
-            raw_output, sections = await parser.parse_pdf(str(parse_path))
-        db.update_document(uuid.UUID(doc_id), {"raw_reducto_output": raw_output})
-
-        chunks = chunker.chunk_sections(sections, doc_title=entry.title)
-        if not chunks:
-            raise RuntimeError("parser returned no content")
-        embeddings = await embedder.embed_texts([c.content for c in chunks])
-
-        db.insert_chunks([
-            {
-                "document_id": doc_id,
-                "content": c.content,
-                "section_title": c.section_title,
-                "page_number": c.page_number,
-                "chunk_index": c.chunk_index,
-                "doc_type": entry.doc_type,
-                "grid_provider": entry.scope,
-                "hierarchy_priority": entry.hierarchy_priority,
-                "embedding": embeddings[i],
-                "token_count": c.token_count,
-            }
-            for i, c in enumerate(chunks)
-        ])
-        db.update_document(uuid.UUID(doc_id), {"ingestion_status": "completed"})
-        return len(chunks)
-    except Exception:
-        db.update_document(uuid.UUID(doc_id), {"ingestion_status": "failed"})
-        raise
+async def load_all(sources, repo_root, db, parser, chunker, embedder, load=None) -> dict[str, int]:
+    """Load every version in order. Returns a count per action, plus 'failed' and 'not attempted'."""
+    load = load or load_version
+    counts: Counter[str] = Counter()
+    for s in sources:
+        source = db.find_source(s.title) or db.insert_source(
+            s.title, s.issuer, s.level, s.authority_rank, s.scopes, None, s.listing_address
+        )
+        for k, v in enumerate(s.versions):
+            print(f"{v.path} ...", flush=True)
+            try:
+                action, doc_id = await load(
+                    db, source, repo_root / v.path, v.title, v.address,
+                    parser, chunker, embedder, max_pages=v.max_pages, stored_path=v.path,
+                )
+            except Exception as e:  # noqa: BLE001 - report, then skip this source's later versions
+                print(f"  FAILED: {type(e).__name__}: {e}")
+                counts["failed"] += 1
+                rest = len(s.versions) - k - 1
+                if rest:
+                    print(f"  {rest} later version(s) of {s.title!r} not attempted")
+                    counts["not attempted"] += rest
+                break
+            print(f"  {action} ({doc_id})")
+            counts[action] += 1
+    return dict(counts)
 
 
 async def main() -> int:
@@ -194,20 +175,17 @@ async def main() -> int:
         corpus_path = repo_root / corpus_path
 
     try:
-        entries = load_corpus(corpus_path, repo_root)
+        sources = load_corpus(corpus_path, repo_root)
     except ValueError as e:
         print(e)
         return 2
 
     db = DatabaseClient()
-    decisions = plan(entries, db.list_documents())
-
-    for entry, action, stale in decisions:
-        pages = f", first {entry.max_pages} pages" if entry.max_pages else ""
-        note = f" ({len(stale)} stale row(s) to delete)" if stale else ""
-        print(f"{action:6}  {entry.path}  [{entry.level}/{entry.scope or '-'}{pages}]{note}")
-
     if args.dry_run:
+        known = {d["file_sha256"] for d in db.list_documents() if d.get("status") != "pending"}
+        for s, v, action in plan(sources, known, repo_root):
+            pages = f", first {v.max_pages} pages" if v.max_pages else ""
+            print(f"{action:5}  {v.path}  [{s.level}/{','.join(s.scopes) or '-'}{pages}]")
         return 0
 
     settings = get_settings()
@@ -218,29 +196,14 @@ async def main() -> int:
         model=settings.embedding_model,
         dimensions=settings.embedding_dimensions,
     )
-
-    loaded = skipped = failed = 0
     try:
-        for entry, action, stale in decisions:
-            if action == "skip":
-                skipped += 1
-                continue
-            for doc_id in stale:
-                db.delete_document(uuid.UUID(doc_id))
-            print(f"\nLoading {entry.path} ...", flush=True)
-            try:
-                n = await ingest(entry, repo_root, db, parser, chunker, embedder)
-                print(f"  stored {n} chunks")
-                loaded += 1
-            except Exception as e:  # noqa: BLE001 - report and continue with the next document
-                print(f"  FAILED: {type(e).__name__}: {e}")
-                failed += 1
+        counts = await load_all(sources, repo_root, db, parser, chunker, embedder)
     finally:
         await parser.close()
         await embedder.close()
 
-    print(f"\nDone: {loaded} loaded, {skipped} skipped, {failed} failed.")
-    return 1 if failed else 0
+    print("\nDone: " + ", ".join(f"{n} {a}" for a, n in sorted(counts.items())))
+    return 1 if counts.get("failed") else 0
 
 
 if __name__ == "__main__":

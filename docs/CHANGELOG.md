@@ -32,3 +32,5 @@ Each entry: what changed and why, then the evidence. Measurements live in [basel
   Evidence: 12 function tests on local Postgres pass, including a failed promotion that leaves the previous version current with its chunks, and search ignoring pending and retired chunks.
 - **Remove `scripts/replace_document.py`; add content fingerprints and client methods for holding, promoting and rejecting versions.** Replacing a document in place erased the old version and made logged answers point at text that no longer existed.
   Evidence: 23 new unit tests (fingerprint normalisation, flag inserted before its pending version, RPC parameters); 130 tests pass with the database tests.
+- **Loader and `POST /ingest` load versions by fingerprint; `corpus.yaml` lists sources with versions oldest first; `DELETE /documents` removed.** The path-keyed loader skipped a changed file at an unchanged path (the EKZ case), and deleting a version would break the answers that used it.
+  Evidence: 25 new or rewritten tests: same bytes skipped, same text with new bytes dismissed with no open flag, an interrupted load resumed, a failed version stops later ones of its source; 146 tests pass.

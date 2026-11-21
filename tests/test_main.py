@@ -65,3 +65,8 @@ def test_get_query_log(client):
     response = client.get(f"/query/{log_id}")
     assert response.status_code == 200
     assert "question" in response.json()
+
+
+def test_documents_cannot_be_deleted(client):
+    response = client.delete(f"/documents/{uuid.uuid4()}")
+    assert response.status_code == 405

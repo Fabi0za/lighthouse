@@ -75,9 +75,6 @@ class DatabaseClient:
             .data[0]
         )
 
-    def delete_document(self, doc_id: uuid.UUID) -> None:
-        self.client.table("documents").delete().eq("id", str(doc_id)).execute()
-
     def hold_version(
         self,
         source_id: str,
