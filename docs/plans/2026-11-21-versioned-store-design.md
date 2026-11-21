@@ -235,6 +235,7 @@ The store is not touched, and the result matches the baseline's definition of th
 - **Original files are not stored.** Fingerprint, path and address are kept, and the parsed text is the retained record. If a publisher removes a file, re-parsing it with a better parser is impossible.
 - **Retiring without a successor** (a source withdrawn) is not covered. Only replacement retires.
 - **Scopes sit on the source, not the version.** A new version that changes where it applies updates the source. Past answers keep their version references but not the scopes in force at the time.
+- **The loader matches sources by title**, since `sources` has no other key. Renaming a source's title in `corpus.yaml` creates a new source instead of a new version of the old one.
 - **`scripts/experiments/version_baseline.py`** relies on V1.2 being indexed and will need a scratch load after this change.
 
 ## Left to the builder
