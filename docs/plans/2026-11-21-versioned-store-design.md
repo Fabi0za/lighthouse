@@ -229,6 +229,7 @@ The store is not touched, and the result matches the baseline's definition of th
 
 - **Text normalisation behind `text_sha256`.** Which differences count as packaging (whitespace, page headers, a date in the footer) is not known. Starting rule (designer's call): parsed section texts in order, Unicode NFC, whitespace runs collapsed to one space, nothing else removed. Test against the EKZ archive captures (52 distinct contents for 34 files), scoring each pair as real change or cosmetic.
 - **Rebuilt chunks equal the originals only if chunker settings are unchanged.** Reinstating or rolling back relies on it. Test by rebuilding a version's chunks and comparing them with those recorded in a query log.
+  First check (2026-11-21, after the Slice 1 reload): BKW V1.2's chunks rebuilt from its retained parsed output, with unchanged chunker settings, give 27 chunks, the same count as originally loaded. The 2 V1.2 chunks recorded in the 8 earlier query logs (indexes 2 and 5) match their rebuilt counterparts exactly in text, section and page. That covers 2 of 27 chunks, and embeddings were not compared.
 
 ## Limitations
 

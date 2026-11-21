@@ -36,6 +36,10 @@ Working notes for the build. Not for the README.
 - A document can apply to several scopes (BE/JU/SO rules cover many operators); one scope field per document cannot express that.
 - issuer, level and source_url have no column yet; they live only in corpus.yaml until the store is remodelled.
 
+## Observations
+
+- Two current documents of the same level disagree on the control circuit breaker. BKW Vorgaben V1.3 requires a spare mounting slot including a control circuit breaker; Technische Anforderungen zwecks Notfallsteuerung V1.1 says the relay connection does not need the unmetered breaker. In all 3 "current" runs of Q1 (see baseline) the model resolves it as general rule vs special case. Not a version problem, but the authority and conflict handling in "The bigger system" will meet it.
+
 ## What the surrounding system must provide
 
 - Every stored piece knows its source and version.
