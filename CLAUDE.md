@@ -31,6 +31,11 @@ Every behaviour change gets an entry in `docs/CHANGELOG.md`, two lines at most:
 
 Measurements and experiment results go in `docs/baseline.md`, not in the changelog.
 
+## Experiments
+
+- Every experiment run saves its raw output under `plans-local/` (not committed).
+- Docs that report a number say where it came from: the script and mode, and the local file holding the raw output.
+
 ## Pushing
 
 - Never push without being asked.
