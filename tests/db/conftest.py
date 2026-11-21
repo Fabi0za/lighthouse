@@ -29,10 +29,14 @@ def _create_database() -> tuple[str, str]:
         admin.execute(f'create database "{name}"')
     url = _with_db(ADMIN_URL, name)
     with psycopg.connect(url, autocommit=True) as conn:
-        conn.execute(
-            "do $$ begin create role service_role; "
-            "exception when duplicate_object then null; end $$;"
-        )
+        # Roles Supabase provides. service_role bypasses row level security there;
+        # anon and authenticated do not.
+        for role in ("service_role", "anon", "authenticated"):
+            conn.execute(
+                f"do $$ begin create role {role} nologin; "
+                "exception when duplicate_object then null; end $$;"
+            )
+        conn.execute("alter role service_role bypassrls")
         conn.execute(SCHEMA.read_text(encoding="utf-8"))
     return name, url
 

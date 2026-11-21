@@ -347,8 +347,28 @@ $$;
 -- The app connects with the secret key (sb_secret_...), which acts as service_role.
 -- On this project, tables created in the SQL editor were not readable by service_role
 -- (error 42501 "permission denied") until these grants were run.
--- anon/authenticated are deliberately not granted: these tables have no row-level security.
+-- anon/authenticated are deliberately not granted (see row level security below).
 -- ---------------------------------------------------------------------------
 grant usage on schema public to service_role;
 grant select, insert, update, delete on all tables in schema public to service_role;
 grant execute on all functions in schema public to service_role;
+
+-- Only the backend may read or write the store. Supabase exposes the public schema to the
+-- anon and authenticated roles through its API, and its default privileges can grant them
+-- table access. Row level security with no policies denies them every row; service_role
+-- bypasses row level security. The write functions run with the caller's rights, and
+-- execute is revoked from everyone but service_role, so a public key cannot call them.
+-- anon and authenticated must exist (they do on Supabase; the test setup creates them).
+alter table sources enable row level security;
+alter table source_scopes enable row level security;
+alter table flags enable row level security;
+alter table documents enable row level security;
+alter table document_chunks enable row level security;
+alter table query_logs enable row level security;
+alter table query_log_documents enable row level security;
+alter table eval_questions enable row level security;
+alter table eval_runs enable row level security;
+
+revoke execute on function promote_version(uuid, text) from public, anon, authenticated;
+revoke execute on function reject_version(uuid, text) from public, anon, authenticated;
+revoke execute on function log_answer(jsonb, uuid[]) from public, anon, authenticated;
