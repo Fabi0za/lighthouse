@@ -19,9 +19,11 @@ How the existing assistant answers when a document has been replaced by a newer 
 
 | Case | What the model sees |
 |---|---|
+| **Stale** | All V1.3 chunks removed from the top-40 before reranking, as if the store held only the old version. |
 | **Both, labelled** | The normal pipeline. Titles carry version and validity date, taken from `corpus.yaml`. |
+| **Both, unlabelled** | The same top-8 as the labelled case, but V1.2 and V1.3 both titled "Vorgaben an Niederspannungs-Installationen im Verteilnetz der BKW", in the source label and in the chunk prefix. Text inside the documents is unchanged. |
 
-The reranked top-8 was identical across the 3 runs of each question.
+In every case the reranked top-8 was identical across the 3 runs of a question.
 
 ## Results
 
@@ -29,15 +31,20 @@ The reranked top-8 was identical across the 3 runs of each question.
 
 | Case | Q | Answer follows | All V1.3 facts | Uses V1.2 text as valid | Notes two versions | Treats difference as conflict |
 |---|---|---|---|---|---|---|
+| Stale | Q1 | V1.2 | 0/3 | 3/3 | – (0/3 suspect a newer version) | – |
+| Stale | Q2 | none: "not in the sources, probably not needed" | 0/3 | 3/3 | – (0/3 suspect a newer version) | – |
 | Labelled | Q1 | V1.3 | 3/3 | 1/3 | 3/3 | 0/3 |
 | Labelled | Q2 | V1.3 | 3/3 | 2/3 | 3/3 | 0/3 |
+| Unlabelled | Q1 | V1.3 and V1.2 merged | 3/3 | 3/3 | 0/3 | 0/3 |
+| Unlabelled | Q2 | V1.3 and V1.2 merged | 3/3 | 3/3 | 0/3 | 0/3 |
 
+- **Stale:** the answer is confidently wrong for Q1. It states V1.2's blanket rule as current, and nothing signals that a newer version exists.
 - **Labelled:** the model picks V1.3 by the version and date in the titles. It still cites V1.2 in every run and calls the two versions compatible. That is wrong for Q1, where V1.2 alone would mean nothing needs preparing. V1.3's own "Ersetzt V1.2" chunk was never in the top-8.
+- **Unlabelled:** the model can no longer tell that there are two versions, and presents both sentences as one document's rules.
 
 ## Not yet shown
 
 - One document pair and two questions, 3 runs each, one model.
 - Version labels were written by hand in `corpus.yaml`; nothing in the pipeline derives them.
-- The stale case (only the old version stored) and an unlabelled case.
 - The other real cases are untested: an in-place change under the same file name (EKZ), and the archive history.
 - Answers were checked by the author against the source text, not by a licensed expert.
