@@ -113,3 +113,40 @@ def test_scopes_many_per_source(pg):
     pg.execute("insert into source_scopes (source_id, scope) values (%s, 'A'), (%s, 'B')", (s, s))
     n = pg.execute("select count(*) from source_scopes where source_id = %s", (s,)).fetchone()[0]
     assert n == 2
+
+
+def _resolved_flag(conn, source_id):
+    f = make_flag(conn, source_id)
+    conn.execute("update flags set resolved_at = now(), resolution = 'done' where id = %s", (f,))
+    return f
+
+
+def test_pending_rejects_resolved_flag(pg):
+    s = make_source(pg)
+    with pytest.raises(errors.CheckViolation):
+        make_document(pg, s, flag_id=_resolved_flag(pg, s))
+
+
+def test_pending_rejects_other_sources_flag(pg):
+    s, other = make_source(pg, title="A"), make_source(pg, title="B")
+    with pytest.raises(errors.CheckViolation):
+        make_document(pg, s, flag_id=make_flag(pg, other))
+
+
+def test_reinstating_to_pending_needs_an_open_flag(pg):
+    s = make_source(pg)
+    d = make_document(pg, s, status="retired", retired_at="2026-01-01", text_sha256="t1")
+    with pytest.raises(errors.CheckViolation):
+        pg.execute(
+            "update documents set status = 'pending', retired_at = null, flag_id = %s where id = %s",
+            (_resolved_flag(pg, s), d),
+        )
+
+
+def test_reinstating_to_pending_with_open_flag_succeeds(pg):
+    s = make_source(pg)
+    d = make_document(pg, s, status="retired", retired_at="2026-01-01", text_sha256="t1")
+    pg.execute(
+        "update documents set status = 'pending', retired_at = null, flag_id = %s where id = %s",
+        (make_flag(pg, s), d),
+    )

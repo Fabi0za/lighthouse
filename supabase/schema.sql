@@ -100,6 +100,25 @@ create trigger flags_resolve_guard
     before update on flags
     for each row execute function flags_resolve_guard();
 
+-- A pending version must be held by an open flag of its own source (checked when a
+-- version is inserted as pending or set back to pending, e.g. when reinstated).
+create function documents_pending_needs_open_flag() returns trigger
+language plpgsql as $$
+begin
+    if new.status = 'pending' and not exists (
+        select 1 from flags f
+        where f.id = new.flag_id and f.resolved_at is null and f.source_id = new.source_id
+    ) then
+        raise exception 'pending document % needs an open flag of source %', new.id, new.source_id
+            using errcode = '23514';
+    end if;
+    return new;
+end $$;
+
+create trigger documents_pending_needs_open_flag
+    before insert or update of status, flag_id, source_id on documents
+    for each row execute function documents_pending_needs_open_flag();
+
 -- ---------------------------------------------------------------------------
 -- Chunks: only current (and briefly pending) versions have any
 -- ---------------------------------------------------------------------------

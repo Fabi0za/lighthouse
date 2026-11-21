@@ -103,7 +103,7 @@ Constraints:
 - **One current per source:** `unique index on documents(source_id) where status = 'current'`. (G1)
 - **One version per content:** `unique (source_id, text_sha256)`. The same text cannot become a second version, and a rejected candidate cannot be re-flagged over and over. Same text under different packaging resolves to the existing version.
 - **Current means loaded:** `check (status <> 'current' or ingestion_status = 'completed')`.
-- **Pending means flagged:** `check (status <> 'pending' or flag_id is not null)`. (G2)
+- **Pending means flagged:** `check (status <> 'pending' or flag_id is not null)`, and a trigger requires that flag to be open and to belong to the same source, whenever a version is inserted as or set back to `pending`. (G2)
 - **Retired has a date:** `check ((status = 'retired') = (retired_at is not null))`.
 - **Fingerprints are immutable:** a trigger rejects changing `file_sha256`, or `text_sha256` once set. In-place replacement, which `scripts/replace_document.py` does today, becomes impossible; that script is removed. (G3)
 
@@ -180,7 +180,7 @@ Code that changes as a consequence: the reranker boost becomes "detected scope i
 | B: retire deletes chunks | After promotion, V1.2 has zero chunk rows and still has its `documents` row with fingerprints and `parsed_output`. |
 | Atomic swap | `promote_version` that fails midway (for example, the document is not loaded) leaves the previous version current and its chunks intact. |
 | Fingerprint, not path | Loading a changed file at the same path creates a new version (the EKZ case, which the path-keyed loader skips today). Loading byte-different but text-identical files creates no version and leaves no open flag. |
-| Pending means flagged | Inserting `pending` without `flag_id` fails. Resolving a flag whose document is still pending fails. |
+| Pending means flagged | Inserting `pending` without `flag_id`, with a resolved flag, or with another source's flag fails; so does setting a version back to `pending` with a resolved flag. Resolving a flag whose document is still pending fails. |
 | Immutable fingerprints | Updating `text_sha256` on a loaded version fails. |
 | Answers reference versions | A Q1 run writes one row per distinct version in its top-8. After V1.3 retires, the list query returns that run. Deleting a referenced version fails. |
 | Multiple scopes | WV BE/JU/SO with two scopes: the reranker boost applies for a question naming either one. |
