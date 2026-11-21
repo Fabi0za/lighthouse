@@ -10,7 +10,9 @@ retiring the previous version. Each source's versions are loaded oldest first,
 as listed; after a failure, later versions of that source are not attempted,
 so an older version can never be promoted over a newer one.
 
-Sources are matched by title: renaming a source title creates a new source.
+Sources are matched by title: renaming a source title creates a new source. For a
+source that already exists, issuer, level, listing address and scopes are updated
+to match corpus.yaml, and the output says what changed.
 
 With --parsed-cache DIR, a file DIR/<pdf sha256>.json is used as the parser output
 instead of calling the parser; the output says which versions came from the cache.
@@ -142,15 +144,35 @@ def plan(
     return [(s, v, action(v)) for s in sources for v in s.versions]
 
 
+def sync_source(db, stored: dict, s: CorpusSource) -> None:
+    """Bring a stored source's fields and scopes in line with corpus.yaml, and say what changed."""
+    wanted = {"issuer": s.issuer, "level": s.level, "authority_rank": s.authority_rank,
+              "listing_address": s.listing_address}
+    changed = {k: v for k, v in wanted.items() if stored.get(k) != v}
+    notes = [f"{k} {stored.get(k)!r} -> {v!r}" for k, v in changed.items()]
+    if changed:
+        db.update_source(stored["id"], changed)
+    old_scopes, new_scopes = sorted(db.get_scopes(stored["id"])), sorted(s.scopes)
+    if old_scopes != new_scopes:
+        db.set_scopes(stored["id"], new_scopes)
+        notes.append(f"scopes {old_scopes} -> {new_scopes}")
+    if notes:
+        print(f"updated source {s.title!r}: " + "; ".join(notes))
+
+
 async def load_all(sources, repo_root, db, parser, chunker, embedder, load=None,
                    parsed_cache: Path | None = None) -> dict[str, int]:
     """Load every version in order. Returns a count per action, plus 'failed' and 'not attempted'."""
     load = load or load_version
     counts: Counter[str] = Counter()
     for s in sources:
-        source = db.find_source(s.title) or db.insert_source(
-            s.title, s.issuer, s.level, s.authority_rank, s.scopes, None, s.listing_address
-        )
+        source = db.find_source(s.title)
+        if source:
+            sync_source(db, source, s)
+        else:
+            source = db.insert_source(
+                s.title, s.issuer, s.level, s.authority_rank, s.scopes, None, s.listing_address
+            )
         for k, v in enumerate(s.versions):
             cached = cached_output(parsed_cache, file_sha256(repo_root / v.path))
             print(f"{v.path} ..." + (f" (parser output from cache: {cached.name})" if cached else ""),

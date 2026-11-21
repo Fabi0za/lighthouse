@@ -162,3 +162,29 @@ def test_get_known_scopes(db, mock_supabase):
 def test_removed_methods_are_gone(db):
     assert not hasattr(db, "insert_document")
     assert not hasattr(db, "get_known_providers")
+
+
+def test_get_scopes(db, mock_supabase):
+    mock_supabase.execute.return_value = MagicMock(data=[{"scope": "B"}, {"scope": "A"}])
+    assert db.get_scopes("s") == ["A", "B"]
+    mock_supabase.table.assert_called_with("source_scopes")
+
+
+def test_update_source(db, mock_supabase):
+    db.update_source("s", {"issuer": "New"})
+    mock_supabase.table.assert_called_with("sources")
+    mock_supabase.update.assert_called_once_with({"issuer": "New"})
+    mock_supabase.eq.assert_called_with("id", "s")
+
+
+def test_set_scopes_replaces_rows(db, mock_supabase):
+    db.set_scopes("s", ["A", "B"])
+    assert [c.args[0] for c in mock_supabase.table.call_args_list] == ["source_scopes", "source_scopes"]
+    mock_supabase.delete.assert_called_once()
+    assert mock_supabase.insert.call_args.args[0] == [
+        {"source_id": "s", "scope": "A"}, {"source_id": "s", "scope": "B"}]
+
+
+def test_set_scopes_to_none_only_deletes(db, mock_supabase):
+    db.set_scopes("s", [])
+    mock_supabase.insert.assert_not_called()

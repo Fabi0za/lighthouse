@@ -46,3 +46,5 @@ Each entry: what changed and why, then the evidence. Measurements live in [basel
   Evidence: run 1 promoted 5, failed 5, left 1 not attempted; reruns promoted the remaining 6, with the 5 failed pending versions dismissed and reloaded; afterwards 0 open flags and the dry run reports 11 skip.
 - **A pending version must be held by an open flag of its own source, enforced by a trigger on `documents`.** The check alone accepted a resolved flag or another source's flag, so a held version could exist with no open flag (whole-branch review).
   Evidence: 4 schema tests on local Postgres: a resolved flag, another source's flag, and setting back to pending with a resolved flag fail; with an open flag it succeeds.
+- **The loader brings an existing source's issuer, level, listing address and scopes in line with `corpus.yaml` and says what changed.** Edits to an already-loaded source in `corpus.yaml` were silently ignored.
+  Evidence: 6 tests: changed fields and scopes are updated and reported, a matching source is left alone, scope rows are replaced.

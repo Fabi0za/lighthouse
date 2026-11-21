@@ -144,7 +144,9 @@ async def test_load_all_creates_source_once_and_loads_versions_in_order(tmp_path
     _files(tmp_path)
     sources = lc.load_corpus(_corpus(tmp_path, GOOD), tmp_path)
     db = MagicMock()
-    db.find_source.side_effect = [None, {"id": "existing"}]
+    db.find_source.side_effect = [None, {"id": "existing", "issuer": "Op", "level": "operator",
+                                         "authority_rank": 2, "listing_address": "https://example.org/list"}]
+    db.get_scopes.return_value = ["X", "Y"]
     db.insert_source.return_value = {"id": "new-src"}
     calls = []
 
@@ -159,6 +161,8 @@ async def test_load_all_creates_source_once_and_loads_versions_in_order(tmp_path
                                              None, None)
     assert calls == [("new-src", "a.pdf", None), ("existing", "v1.pdf", None), ("existing", "v2.pdf", 4)]
     assert counts == {"promoted": 3}
+    db.update_source.assert_not_called()  # stored source already matches corpus.yaml
+    db.set_scopes.assert_not_called()
 
 
 async def test_load_all_stops_a_source_after_a_failure(tmp_path):
@@ -211,3 +215,43 @@ sources:
     db.find_source.return_value = {"id": "s"}
     await lc.load_all(sources, tmp_path, db, None, None, None, load=fake_load, parsed_cache=tmp_path)
     assert seen["cache"] == tmp_path
+
+
+def _stored(**over):
+    row = {"id": "s", "issuer": "Op", "level": "operator", "authority_rank": 2,
+           "listing_address": "https://example.org/list"}
+    return {**row, **over}
+
+
+async def _noop_load(*a, **k):
+    return "skipped", "d"
+
+
+async def test_load_all_syncs_changed_source_fields_and_scopes(tmp_path, capsys):
+    _files(tmp_path)
+    sources = lc.load_corpus(_corpus(tmp_path, GOOD), tmp_path)[1:]  # the operator source
+    db = MagicMock()
+    db.find_source.return_value = _stored(issuer="Old issuer", level="national", authority_rank=1)
+    db.get_scopes.return_value = ["X"]
+
+    await lc.load_all(sources, tmp_path, db, None, None, None, load=_noop_load)
+
+    db.update_source.assert_called_once_with(
+        "s", {"issuer": "Op", "level": "operator", "authority_rank": 2})
+    db.set_scopes.assert_called_once_with("s", ["X", "Y"])
+    out = capsys.readouterr().out
+    assert "updated source 'Operator rules'" in out
+    assert "scopes ['X'] -> ['X', 'Y']" in out
+
+
+async def test_load_all_leaves_matching_source_alone(tmp_path):
+    _files(tmp_path)
+    sources = lc.load_corpus(_corpus(tmp_path, GOOD), tmp_path)[1:]
+    db = MagicMock()
+    db.find_source.return_value = _stored()
+    db.get_scopes.return_value = ["Y", "X"]  # order does not matter
+
+    await lc.load_all(sources, tmp_path, db, None, None, None, load=_noop_load)
+
+    db.update_source.assert_not_called()
+    db.set_scopes.assert_not_called()

@@ -48,6 +48,21 @@ class DatabaseClient:
             ).execute()
         return source
 
+    def get_scopes(self, source_id: str) -> list[str]:
+        rows = self.client.table("source_scopes").select("scope").eq("source_id", str(source_id)).execute().data
+        return sorted(row["scope"] for row in rows)
+
+    def update_source(self, source_id: str, fields: dict[str, Any]) -> None:
+        self.client.table("sources").update(fields).eq("id", str(source_id)).execute()
+
+    def set_scopes(self, source_id: str, scopes: list[str]) -> None:
+        """Replace the source's scope rows with scopes."""
+        self.client.table("source_scopes").delete().eq("source_id", str(source_id)).execute()
+        if scopes:
+            self.client.table("source_scopes").insert(
+                [{"source_id": str(source_id), "scope": s} for s in scopes]
+            ).execute()
+
     def get_known_scopes(self) -> list[str]:
         rows = self.client.table("source_scopes").select("scope").execute().data
         return list({row["scope"] for row in rows})
