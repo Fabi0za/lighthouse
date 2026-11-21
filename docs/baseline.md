@@ -9,27 +9,35 @@ How the existing assistant answers when a document has been replaced by a newer 
 - **Difference:** in section 4, *Steuern oder Sperren von Anlagen*:
   - V1.2 says only that new installations and self-consumption systems are no longer controlled or blocked.
   - V1.3 narrows this to audio-frequency ripple-control receivers and requires a spare mounting slot with a control circuit breaker, plus sealable terminals for control wires 1 and 0. It also makes wire 2 (dual tariff) optional.
-- **Pipeline:** `embed-v5.0-pro` (1536 dimensions), vector search top-40, Cohere `rerank-v3.5` top-8, `claude-sonnet-5-5` with the existing prompt.
+- **Pipeline:** `embed-v5.0-pro` (1536 dimensions), vector search top-40, Cohere `rerank-v3.5` top-8, `claude-sonnet-5-5` with the existing prompt. Sampling is not fixed, so each question was run 3 times.
 - **Questions:**
   - Q1: "Was muss bei Neuinstallationen im Netz der BKW für Steuerlösungen vorbereitet werden?"
   - Q2: "Muss bei Neuinstallationen im Netz der BKW ein Steuerdraht 2 für den Doppeltarif vorgesehen werden?"
+- **Scoring:** the author compared each answer and its citations against the V1.3 text. The pipeline's own confidence field is not used, because it recognises only an English "Confidence:" line.
 
-## Retrieval
+## Cases
 
-Both versions loaded, normal pipeline.
+| Case | What the model sees |
+|---|---|
+| **Both, labelled** | The normal pipeline. Titles carry version and validity date, taken from `corpus.yaml`. |
 
-| Q | Top-40 chunks: V1.2 / V1.3 / other | Rank of V1.3 section 4 | Rank of V1.2 section 4 |
-|---|---|---|---|
-| Q1 | 12 / 14 / 14 | 1 and 2 | 4 |
-| Q2 | 10 / 10 / 20 | 1 and 2 | 5 |
+The reranked top-8 was identical across the 3 runs of each question.
 
-The superseded section reaches the top-8 for both questions. Both versions have priority 2, so only the version and date in their titles, written in `corpus.yaml`, tell them apart.
+## Results
 
-## Answers
+3 runs per cell.
 
-Not measured yet: answer generation fails with HTTP 400 because `llm.py` sends `temperature`, which `claude-sonnet-5-5` rejects.
+| Case | Q | Answer follows | All V1.3 facts | Uses V1.2 text as valid | Notes two versions | Treats difference as conflict |
+|---|---|---|---|---|---|---|
+| Labelled | Q1 | V1.3 | 3/3 | 1/3 | 3/3 | 0/3 |
+| Labelled | Q2 | V1.3 | 3/3 | 2/3 | 3/3 | 0/3 |
+
+- **Labelled:** the model picks V1.3 by the version and date in the titles. It still cites V1.2 in every run and calls the two versions compatible. That is wrong for Q1, where V1.2 alone would mean nothing needs preparing. V1.3's own "Ersetzt V1.2" chunk was never in the top-8.
 
 ## Not yet shown
 
-- One document pair and two questions.
+- One document pair and two questions, 3 runs each, one model.
 - Version labels were written by hand in `corpus.yaml`; nothing in the pipeline derives them.
+- The stale case (only the old version stored) and an unlabelled case.
+- The other real cases are untested: an in-place change under the same file name (EKZ), and the archive history.
+- Answers were checked by the author against the source text, not by a licensed expert.
