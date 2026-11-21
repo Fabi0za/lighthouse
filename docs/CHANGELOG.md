@@ -48,3 +48,5 @@ Each entry: what changed and why, then the evidence. Measurements live in [basel
   Evidence: 4 schema tests on local Postgres: a resolved flag, another source's flag, and setting back to pending with a resolved flag fail; with an open flag it succeeds.
 - **The loader brings an existing source's issuer, level, listing address and scopes in line with `corpus.yaml` and says what changed.** Edits to an already-loaded source in `corpus.yaml` were silently ignored.
   Evidence: 6 tests: changed fields and scopes are updated and reported, a matching source is left alone, scope rows are replaced.
+- **A pending version left by an interrupted load is dismissed when a new file has the same text but other bytes.** It made the unique text fingerprint fail on every run and blocked that source's later versions.
+  Evidence: reproduced on local Postgres (UniqueViolation), now promoted with no open flag; 3 real-Postgres tests drive `load_version` through the actual constraints.

@@ -67,6 +67,7 @@ async def load_version(
             if v.get("status") != "pending":
                 return "skipped", v["id"]
             db.delete_pending_version(v["id"], "dismissed (reload)")
+    versions = [v for v in versions if v.get("file_sha256") != file_hash]
 
     doc = db.hold_version(source_id, title, address, stored_path or str(file), file_hash)
     doc_id = doc["id"]
@@ -83,9 +84,14 @@ async def load_version(
 
         text_hash = text_sha256(sections)
         for v in versions:
-            if v.get("text_sha256") == text_hash and v.get("status") != "pending":
-                db.delete_pending_version(doc_id, "dismissed (same text)")
-                return "dismissed", v["id"]
+            if v.get("text_sha256") != text_hash or v["id"] == doc_id:
+                continue
+            if v.get("status") == "pending":
+                # Left by an interrupted load of other bytes with the same text.
+                db.delete_pending_version(v["id"], "dismissed (reload)")
+                continue
+            db.delete_pending_version(doc_id, "dismissed (same text)")
+            return "dismissed", v["id"]
         db.set_text_fingerprint(doc_id, text_hash, raw_output)
 
         chunks = chunker.chunk_sections(sections, doc_title=title)

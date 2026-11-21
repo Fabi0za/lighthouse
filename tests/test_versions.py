@@ -216,3 +216,16 @@ def test_cached_output_path(tmp_path):
     assert cached_output(tmp_path, file_sha256(f)) is None
     cache = _cache(tmp_path, f, {})
     assert cached_output(cache, file_sha256(f)) == cache / f"{file_sha256(f)}.json"
+
+
+async def test_pending_row_with_same_text_but_other_bytes_is_dismissed_not_stuck(tmp_path):
+    f = _pdf(tmp_path / "v2b.pdf")
+    existing = [{"id": "stale", "status": "pending", "file_sha256": "older-bytes",
+                 "text_sha256": text_sha256(SECTIONS)}]
+    db, parser, chunker, embedder = _deps(existing)
+
+    action, doc_id = await load_version(db, SOURCE, f, "Doc", None, parser, chunker, embedder)
+
+    assert (action, doc_id) == ("promoted", "new-doc")
+    db.delete_pending_version.assert_called_once_with("stale", "dismissed (reload)")
+    db.set_text_fingerprint.assert_called_once()
