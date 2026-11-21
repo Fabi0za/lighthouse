@@ -11,6 +11,9 @@ as listed; after a failure, later versions of that source are not attempted,
 so an older version can never be promoted over a newer one.
 
 Sources are matched by title: renaming a source title creates a new source.
+
+With --parsed-cache DIR, a file DIR/<pdf sha256>.json is used as the parser output
+instead of calling the parser; the output says which versions came from the cache.
 """
 from __future__ import annotations
 
@@ -28,7 +31,7 @@ from app.ingestion.chunker import Chunker
 from app.ingestion.embedder import Embedder
 from app.ingestion.fingerprint import file_sha256
 from app.ingestion.parser import ReductoParser
-from app.ingestion.versions import first_pages, load_version  # noqa: F401 - first_pages re-exported
+from app.ingestion.versions import cached_output, first_pages, load_version  # noqa: F401 - first_pages re-exported
 from app.models.database import DatabaseClient
 
 AUTHORITY_RANK = {"national": 1, "operator": 2}
@@ -122,20 +125,25 @@ def load_corpus(corpus_path: Path, repo_root: Path) -> list[CorpusSource]:
 
 
 def plan(
-    sources: list[CorpusSource], known_file_hashes: set[str], repo_root: Path
+    sources: list[CorpusSource], known_file_hashes: set[str], repo_root: Path,
+    parsed_cache: Path | None = None,
 ) -> list[tuple[CorpusSource, CorpusVersion, str]]:
-    """For --dry-run: 'skip' when the file's bytes are already a stored version, else 'load'.
+    """For --dry-run, per version: 'skip' (its bytes are already a stored version),
+    'cache' (to load, parser output read from the cache) or 'parse' (to load, parsed).
 
-    Whether a 'load' ends as promoted or dismissed is only known after parsing.
+    Whether a load ends as promoted or dismissed is only known after reading the text.
     """
-    return [
-        (s, v, "skip" if file_sha256(repo_root / v.path) in known_file_hashes else "load")
-        for s in sources
-        for v in s.versions
-    ]
+    def action(v: CorpusVersion) -> str:
+        h = file_sha256(repo_root / v.path)
+        if h in known_file_hashes:
+            return "skip"
+        return "cache" if cached_output(parsed_cache, h) else "parse"
+
+    return [(s, v, action(v)) for s in sources for v in s.versions]
 
 
-async def load_all(sources, repo_root, db, parser, chunker, embedder, load=None) -> dict[str, int]:
+async def load_all(sources, repo_root, db, parser, chunker, embedder, load=None,
+                   parsed_cache: Path | None = None) -> dict[str, int]:
     """Load every version in order. Returns a count per action, plus 'failed' and 'not attempted'."""
     load = load or load_version
     counts: Counter[str] = Counter()
@@ -144,11 +152,14 @@ async def load_all(sources, repo_root, db, parser, chunker, embedder, load=None)
             s.title, s.issuer, s.level, s.authority_rank, s.scopes, None, s.listing_address
         )
         for k, v in enumerate(s.versions):
-            print(f"{v.path} ...", flush=True)
+            cached = cached_output(parsed_cache, file_sha256(repo_root / v.path))
+            print(f"{v.path} ..." + (f" (parser output from cache: {cached.name})" if cached else ""),
+                  flush=True)
             try:
                 action, doc_id = await load(
                     db, source, repo_root / v.path, v.title, v.address,
                     parser, chunker, embedder, max_pages=v.max_pages, stored_path=v.path,
+                    parsed_cache=parsed_cache,
                 )
             except Exception as e:  # noqa: BLE001 - report, then skip this source's later versions
                 print(f"  FAILED: {type(e).__name__}: {e}")
@@ -167,6 +178,8 @@ async def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--corpus", default="corpus.yaml")
     ap.add_argument("--dry-run", action="store_true", help="show what would happen, change nothing")
+    ap.add_argument("--parsed-cache", type=Path, default=None,
+                    help="directory of <pdf sha256>.json parser outputs to use instead of parsing")
     args = ap.parse_args()
 
     repo_root = Path(__file__).resolve().parent.parent
@@ -183,7 +196,7 @@ async def main() -> int:
     db = DatabaseClient()
     if args.dry_run:
         known = {d["file_sha256"] for d in db.list_documents() if d.get("status") != "pending"}
-        for s, v, action in plan(sources, known, repo_root):
+        for s, v, action in plan(sources, known, repo_root, parsed_cache=args.parsed_cache):
             pages = f", first {v.max_pages} pages" if v.max_pages else ""
             print(f"{action:5}  {v.path}  [{s.level}/{','.join(s.scopes) or '-'}{pages}]")
         return 0
@@ -197,7 +210,8 @@ async def main() -> int:
         dimensions=settings.embedding_dimensions,
     )
     try:
-        counts = await load_all(sources, repo_root, db, parser, chunker, embedder)
+        counts = await load_all(sources, repo_root, db, parser, chunker, embedder,
+                                parsed_cache=args.parsed_cache)
     finally:
         await parser.close()
         await embedder.close()

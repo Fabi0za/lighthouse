@@ -168,3 +168,51 @@ def test_first_pages_truncates(tmp_path):
     out = first_pages(src, 4, out_dir)
     assert out.name == "big.pdf"
     assert len(PdfReader(str(out)).pages) == 4
+
+
+# --- parsed-output cache -------------------------------------------------------
+
+def _cache(tmp_path, f, raw):
+    import json
+    d = tmp_path / "cache"
+    d.mkdir(exist_ok=True)
+    (d / f"{file_sha256(f)}.json").write_text(json.dumps(raw), encoding="utf-8")
+    return d
+
+
+async def test_cache_hit_uses_cached_output_instead_of_parser(tmp_path):
+    f = _pdf(tmp_path / "v2.pdf", 10)
+    raw = {"result": {"cached": True}}
+    cache = _cache(tmp_path, f, raw)
+    pages_seen: list[int] = []
+    db, parser, chunker, embedder = _deps(pages_seen=pages_seen)
+    parser._extract_sections = MagicMock(return_value=SECTIONS)
+
+    action, _ = await load_version(db, SOURCE, f, "Doc", None, parser, chunker, embedder,
+                                   max_pages=4, parsed_cache=cache)
+
+    assert action == "promoted"
+    assert pages_seen == []  # parse_pdf never called, no truncation
+    parser._extract_sections.assert_called_once_with(raw)
+    db.set_text_fingerprint.assert_called_once_with("new-doc", text_sha256(SECTIONS), raw)
+
+
+async def test_cache_miss_parses(tmp_path):
+    f = _pdf(tmp_path / "v2.pdf")
+    other = _pdf(tmp_path / "other.pdf", 2)
+    cache = _cache(tmp_path, other, {"result": {}})
+    pages_seen: list[int] = []
+    db, parser, chunker, embedder = _deps(pages_seen=pages_seen)
+
+    await load_version(db, SOURCE, f, "Doc", None, parser, chunker, embedder, parsed_cache=cache)
+
+    assert pages_seen == [1]
+
+
+def test_cached_output_path(tmp_path):
+    from app.ingestion.versions import cached_output
+    f = _pdf(tmp_path / "v.pdf")
+    assert cached_output(None, file_sha256(f)) is None
+    assert cached_output(tmp_path, file_sha256(f)) is None
+    cache = _cache(tmp_path, f, {})
+    assert cached_output(cache, file_sha256(f)) == cache / f"{file_sha256(f)}.json"

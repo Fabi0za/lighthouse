@@ -4,6 +4,7 @@ Shared by scripts/load_corpus.py and POST /ingest.
 """
 from __future__ import annotations
 
+import json
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -25,6 +26,14 @@ def first_pages(src: Path, max_pages: int, out_dir: Path) -> Path:
     return out
 
 
+def cached_output(parsed_cache: Path | None, file_hash: str) -> Path | None:
+    """The cached parser output for a file, named <file_sha256>.json, if the cache has one."""
+    if parsed_cache is None:
+        return None
+    path = Path(parsed_cache) / f"{file_hash}.json"
+    return path if path.is_file() else None
+
+
 async def load_version(
     db,
     source: dict[str, Any],
@@ -36,12 +45,17 @@ async def load_version(
     embedder,
     max_pages: int | None = None,
     stored_path: str | None = None,
+    parsed_cache: Path | None = None,
 ) -> tuple[str, str]:
     """Load file as a version of source. Returns (action, document_id).
 
     action is "skipped" (these bytes are already a version), "dismissed" (new bytes,
     same text: repackaging) or "promoted" (new content, now current).
     On failure the version is marked failed and its flag stays open.
+
+    With parsed_cache, a file <file_sha256>.json in that directory is used as the
+    parser's output instead of parsing (max_pages is then ignored: the cached output
+    is whatever was parsed before). Without it, the file is always parsed.
     """
     file = Path(file)
     source_id = source["id"]
@@ -58,9 +72,14 @@ async def load_version(
     doc_id = doc["id"]
     try:
         db.update_document(doc_id, {"ingestion_status": "processing"})
-        with tempfile.TemporaryDirectory() as tmp:
-            parse_path = first_pages(file, max_pages, Path(tmp)) if max_pages else file
-            raw_output, sections = await parser.parse_pdf(str(parse_path))
+        cached = cached_output(parsed_cache, file_hash)
+        if cached:
+            raw_output = json.loads(cached.read_text(encoding="utf-8"))
+            sections = parser._extract_sections(raw_output)
+        else:
+            with tempfile.TemporaryDirectory() as tmp:
+                parse_path = first_pages(file, max_pages, Path(tmp)) if max_pages else file
+                raw_output, sections = await parser.parse_pdf(str(parse_path))
 
         text_hash = text_sha256(sections)
         for v in versions:

@@ -111,12 +111,22 @@ sources:
         lc.load_corpus(corpus, tmp_path)
 
 
-def test_plan_skips_files_already_stored(tmp_path):
+def test_plan_skips_stored_files_and_says_cache_or_parse(tmp_path):
     _files(tmp_path)
     sources = lc.load_corpus(_corpus(tmp_path, GOOD), tmp_path)
     known = {file_sha256(tmp_path / "v1.pdf")}
-    actions = {v.path: a for _, v, a in lc.plan(sources, known, tmp_path)}
-    assert actions == {"a.pdf": "load", "v1.pdf": "skip", "v2.pdf": "load"}
+    cache = tmp_path / "cache"
+    cache.mkdir()
+    (cache / f"{file_sha256(tmp_path / 'v2.pdf')}.json").write_text("{}", encoding="utf-8")
+    actions = {v.path: a for _, v, a in lc.plan(sources, known, tmp_path, parsed_cache=cache)}
+    assert actions == {"a.pdf": "parse", "v1.pdf": "skip", "v2.pdf": "cache"}
+
+
+def test_plan_without_cache_parses(tmp_path):
+    _files(tmp_path)
+    sources = lc.load_corpus(_corpus(tmp_path, GOOD), tmp_path)
+    actions = {v.path: a for _, v, a in lc.plan(sources, set(), tmp_path)}
+    assert set(actions.values()) == {"parse"}
 
 
 def test_repo_corpus_is_valid():
@@ -138,7 +148,8 @@ async def test_load_all_creates_source_once_and_loads_versions_in_order(tmp_path
     db.insert_source.return_value = {"id": "new-src"}
     calls = []
 
-    async def fake_load(db_, source, file, title, address, *rest, max_pages=None, stored_path=None):
+    async def fake_load(db_, source, file, title, address, *rest, max_pages=None, stored_path=None,
+                        parsed_cache=None):
         calls.append((source["id"], stored_path, max_pages))
         return "promoted", "d"
 
@@ -157,7 +168,8 @@ async def test_load_all_stops_a_source_after_a_failure(tmp_path):
     db.find_source.return_value = {"id": "s"}
     loaded = []
 
-    async def fake_load(db_, source, file, title, address, *rest, max_pages=None, stored_path=None):
+    async def fake_load(db_, source, file, title, address, *rest, max_pages=None, stored_path=None,
+                        parsed_cache=None):
         loaded.append(stored_path)
         if stored_path == "v1.pdf":
             raise RuntimeError("boom")
@@ -181,3 +193,21 @@ sources:
     db.find_source.return_value = {"id": "s"}
     assert await lc.load_all(sources, tmp_path, db, None, None, None) == {"skipped": 1}
     fake.assert_awaited_once()
+
+
+async def test_load_all_passes_cache_through(tmp_path):
+    _pdf(tmp_path / "a.pdf")
+    sources = lc.load_corpus(_corpus(tmp_path, """
+sources:
+  - {title: A, issuer: X, level: national, versions: [{path: a.pdf, title: A}]}
+"""), tmp_path)
+    seen = {}
+
+    async def fake_load(*args, parsed_cache=None, **kwargs):
+        seen["cache"] = parsed_cache
+        return "promoted", "d"
+
+    db = MagicMock()
+    db.find_source.return_value = {"id": "s"}
+    await lc.load_all(sources, tmp_path, db, None, None, None, load=fake_load, parsed_cache=tmp_path)
+    assert seen["cache"] == tmp_path
