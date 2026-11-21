@@ -6,6 +6,7 @@
 #   level national -> doc_type general_regulation, hierarchy_priority 1
 #   level operator -> doc_type grid_provider_rule, hierarchy_priority 2
 #   scope -> grid_provider. issuer and source_url have no column and stay here only.
+# Optional max_pages: load only the first N pages.
 
 documents:
   # --- National (VSE industry recommendations) ---
@@ -65,7 +66,7 @@ documents:
     level: operator
     scope: "BKW"
     source_url: ""
-    # Only pages 1-4 are to be loaded; page 1 reads "Seite 1 von 4".
+    max_pages: 4  # page 1 reads "Seite 1 von 4"; the rest reprints WV - CH 2025
 
   # --- Operator: EKZ ---
   - path: "data/EKZ/technische-bedingungen-fuer-den-parallelbetrieb-von-eea-fuer-internet-2026.pdf"

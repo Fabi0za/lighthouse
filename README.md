@@ -97,6 +97,9 @@ The API will be available at `http://localhost:8000`.
 ## Scripts
 
 ```bash
+# Load every document in corpus.yaml (skips ones already loaded)
+python scripts/load_corpus.py [--dry-run]
+
 # Ingest a PDF
 python scripts/test_ingest.py <pdf_path> [title] [doc_type] [priority]
 
