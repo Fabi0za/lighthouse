@@ -43,14 +43,20 @@ class LLMClient:
             json={
                 "model": self.model,
                 "max_tokens": 4096,
-                "temperature": 0,
+                # No temperature: current Claude models reject it ("deprecated for this model").
                 "system": system_prompt,
                 "messages": [{"role": "user", "content": user_prompt}],
             },
         )
         response.raise_for_status()
         data = response.json()
-        return data["content"][0]["text"]
+        # The response may start with a thinking block; the answer is in the text block(s).
+        texts = [b["text"] for b in data.get("content", []) if b.get("type") == "text"]
+        if not texts:
+            raise RuntimeError(
+                f"Anthropic response has no text block (stop_reason={data.get('stop_reason')})"
+            )
+        return "".join(texts)
 
     async def _generate_openai(self, system_prompt: str, user_prompt: str) -> str:
         response = await self.client.post(

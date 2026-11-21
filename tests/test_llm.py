@@ -63,3 +63,39 @@ async def test_openai_generate(openai_client):
             user_prompt="What is the answer?",
         )
         assert result == "The answer is 42."
+
+
+@pytest.mark.asyncio
+async def test_anthropic_request_has_no_temperature(anthropic_client):
+    mock_response = MagicMock()
+    mock_response.json.return_value = {"content": [{"type": "text", "text": "ok"}]}
+    post = AsyncMock(return_value=mock_response)
+    with patch.object(anthropic_client.client, "post", post):
+        await anthropic_client.generate(system_prompt="s", user_prompt="u")
+    assert "temperature" not in post.call_args.kwargs["json"]
+
+
+@pytest.mark.asyncio
+async def test_anthropic_generate_skips_thinking_block(anthropic_client):
+    mock_response = MagicMock()
+    mock_response.json.return_value = {
+        "content": [
+            {"type": "thinking", "thinking": "", "signature": "sig"},
+            {"type": "text", "text": "The answer is 42."},
+        ]
+    }
+    with patch.object(anthropic_client.client, "post", AsyncMock(return_value=mock_response)):
+        result = await anthropic_client.generate(system_prompt="s", user_prompt="u")
+    assert result == "The answer is 42."
+
+
+@pytest.mark.asyncio
+async def test_anthropic_generate_raises_without_text(anthropic_client):
+    mock_response = MagicMock()
+    mock_response.json.return_value = {
+        "content": [{"type": "thinking", "thinking": "", "signature": "sig"}],
+        "stop_reason": "max_tokens",
+    }
+    with patch.object(anthropic_client.client, "post", AsyncMock(return_value=mock_response)):
+        with pytest.raises(RuntimeError, match="stop_reason=max_tokens"):
+            await anthropic_client.generate(system_prompt="s", user_prompt="u")

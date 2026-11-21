@@ -22,3 +22,5 @@ Each entry: what changed and why, then the evidence. Measurements live in [basel
   Evidence: 6 loader tests; a second run after a rate-limit failure skipped 9 documents and reloaded the 2 failed ones, with no duplicates.
 - **Add BKW Vorgaben V1.2 next to V1.3 as a separate document.** Reproduces the case of a new version published under a new name while the old one stays online.
   Evidence: the V1.2 cover reads "Version V1.2, valid from 1 March 2025"; the V1.3 cover reads "Ersetzt V1.2"; the text differs in section 4.
+- **Anthropic call in `llm.py`: drop `temperature`, return the text block(s) instead of `content[0]`.** `claude-sonnet-5-5` rejects `temperature`, and with thinking the first block need not be text. Answers are no longer deterministic.
+  Evidence: before the change every query failed with HTTP 400 "`temperature` is deprecated for this model"; 3 new tests; 86/86 pass.
