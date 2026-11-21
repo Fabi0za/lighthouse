@@ -26,3 +26,5 @@ Each entry: what changed and why, then the evidence. Measurements live in [basel
   Evidence: before the change every query failed with HTTP 400 "`temperature` is deprecated for this model"; 3 new tests; 86/86 pass.
 - **Add `scripts/experiments/version_baseline.py` (stale and no-label variants), with no change to `app/`.** Measures how answers behave when versions are missing or unlabelled.
   Evidence: results in [baseline.md](baseline.md).
+- **Fresh schema: documents are versions of sources, with scopes, flags and answer-to-version links; `hierarchy_rules` and the solar-specific columns removed.** Two versions of one source could both be searched, and nothing recorded which versions an answer used (see baseline).
+  Evidence: 14 constraint and trigger tests against local Postgres 18 + pgvector pass (one current per source, pending needs a flag, immutable fingerprints, used versions undeletable); 87 others pass, 13 skip without `TEST_DATABASE_URL`.
