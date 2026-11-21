@@ -169,7 +169,7 @@ Code that changes as a consequence: the reranker boost becomes "detected scope i
 
 **Reinstating an old version** (content reverts A → B → A): the unique fingerprint finds A's retired row. It is set back to `pending` with a new flag, its chunks are rebuilt from `parsed_output`, and then it is promoted. Undoing a wrong promotion uses the same path, and the wrongly promoted version is retired by that promotion.
 
-**Loading the corpus.** `corpus.yaml` groups entries by source, and versions are listed oldest first. The loader loads each version and promotes it in order. BKW V1.2 is promoted and then retired by V1.3, so a fresh load exercises the retirement path.
+**Loading the corpus.** `corpus.yaml` groups entries by source, and versions are listed oldest first. The loader loads each version and promotes it in order. BKW V1.2 is promoted and then retired by V1.3, so a fresh load exercises the retirement path. If a version fails to load, the loader does not attempt that source's later versions in the same run: otherwise a rerun would load the failed older version after the newer one and promote it over the newer. The later versions wait for the next run.
 
 ## Tests per choice
 
