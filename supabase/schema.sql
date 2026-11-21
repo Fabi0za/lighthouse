@@ -167,3 +167,12 @@ as $$
     order by rank desc
     limit match_count;
 $$;
+
+-- Privileges for the backend role.
+-- The app connects with the secret key (sb_secret_...), which acts as service_role.
+-- On this project, tables created in the SQL editor were not readable by service_role
+-- (error 42501 "permission denied") until these grants were run.
+-- anon/authenticated are deliberately not granted: these tables have no row-level security.
+grant usage on schema public to service_role;
+grant select, insert, update, delete on all tables in schema public to service_role;
+grant execute on all functions in schema public to service_role;

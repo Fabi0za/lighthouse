@@ -71,7 +71,7 @@ Defaults: `RETRIEVAL_TOP_K=40`, `RERANK_TOP_N=8`, `LLM_PROVIDER=anthropic`.
 
 ### 3. Set up database
 
-Run `supabase/schema.sql` in your Supabase SQL Editor to create tables, HNSW index, and search functions.
+Run `supabase/schema.sql` in your Supabase SQL Editor to create tables, HNSW index, and search functions. The script ends with grants for `service_role` (the role behind the secret key); without them every query fails with `permission denied` (42501).
 
 ### 4. Run
 
