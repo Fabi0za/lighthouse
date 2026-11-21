@@ -20,7 +20,7 @@ def build_dependencies():
     chunker = Chunker(chunk_size=settings.chunk_size, chunk_overlap=settings.chunk_overlap)
 
     embedder = Embedder(
-        api_key=settings.openai_api_key,
+        api_key=settings.cohere_api_key,
         model=settings.embedding_model,
         dimensions=settings.embedding_dimensions,
     )

@@ -41,7 +41,7 @@ async def main():
     settings = get_settings()
     db = DatabaseClient()
     embedder = Embedder(
-        api_key=settings.openai_api_key,
+        api_key=settings.cohere_api_key,
         model=settings.embedding_model,
         dimensions=settings.embedding_dimensions,
     )
@@ -91,14 +91,14 @@ async def main():
             # Judge correctness
             score = None
             details = []
-            if required_facts and settings.openai_api_key:
+            if required_facts and settings.anthropic_api_key:
                 try:
                     judge_result = await answer_correctness(
                         question=question_text,
                         generated_answer=answer,
                         expected_answer=expected_answer,
                         required_facts=required_facts,
-                        openai_api_key=settings.openai_api_key,
+                        anthropic_api_key=settings.anthropic_api_key,
                     )
                     score = judge_result["score"]
                     details = judge_result["details"]

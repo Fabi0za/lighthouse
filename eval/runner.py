@@ -14,13 +14,13 @@ class EvalRunner:
         pipeline: QueryPipeline,
         config_snapshot: dict[str, Any],
         notes: str | None = None,
-        openai_api_key: str | None = None,
+        anthropic_api_key: str | None = None,
     ):
         self.db = db
         self.pipeline = pipeline
         self.config_snapshot = config_snapshot
         self.notes = notes
-        self.openai_api_key = openai_api_key
+        self.anthropic_api_key = anthropic_api_key
 
     async def run(self) -> dict[str, Any]:
         questions = self.db.get_eval_questions()
@@ -68,13 +68,13 @@ class EvalRunner:
 
         # Answer correctness (only for answerable questions with required facts)
         required_facts = question.get("required_facts", [])
-        if required_facts and question["question_type"] == "answerable" and self.openai_api_key:
+        if required_facts and question["question_type"] == "answerable" and self.anthropic_api_key:
             correctness = await answer_correctness(
                 question=question["question"],
                 generated_answer=pipeline_result["answer"],
                 expected_answer=question.get("expected_answer", ""),
                 required_facts=required_facts,
-                openai_api_key=self.openai_api_key,
+                anthropic_api_key=self.anthropic_api_key,
             )
             scores["answer_correctness"] = correctness["score"]
             scores["fact_details"] = correctness["details"]

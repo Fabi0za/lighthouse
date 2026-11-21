@@ -101,7 +101,7 @@ async def test_eval_runner_retrieval_recall_zero_when_wrong_docs(mock_deps):
 
 @pytest.mark.asyncio
 async def test_eval_runner_answer_correctness_none_without_api_key(mock_deps):
-    """Without openai_api_key, answer_correctness should be None."""
+    """Without anthropic_api_key, answer_correctness should be None."""
     runner = EvalRunner(db=mock_deps["db"], pipeline=mock_deps["pipeline"], config_snapshot={})
     results = await runner.run()
 
@@ -109,71 +109,58 @@ async def test_eval_runner_answer_correctness_none_without_api_key(mock_deps):
         assert r["answer_correctness"] is None
 
 
+def _patch_judge(results):
+    """Patch the Anthropic client used by the judge to return the given fact results."""
+    from types import SimpleNamespace
+
+    from eval.metrics import FactResult, JudgeVerdict
+
+    verdict = JudgeVerdict(results=[FactResult(**r) for r in results])
+    response = SimpleNamespace(stop_reason="end_turn", parsed_output=verdict)
+    patcher = patch("eval.metrics.anthropic.AsyncAnthropic")
+    cls = patcher.start()
+    cls.return_value.messages.parse = AsyncMock(return_value=response)
+    cls.return_value.close = AsyncMock()
+    return patcher, cls.return_value
+
+
 @pytest.mark.asyncio
 async def test_answer_correctness_parses_judge_response():
     """Test that answer_correctness correctly parses the judge LLM response."""
-    mock_response = {
-        "choices": [
-            {
-                "message": {
-                    "content": '{"results": [{"fact": "terminal Y", "present": true, "reason": "mentioned"}]}'
-                }
-            }
-        ]
-    }
-
-    with patch("eval.metrics.httpx.AsyncClient") as mock_client_cls:
-        mock_client = AsyncMock()
-        mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=False)
-
-        mock_resp = MagicMock()
-        mock_resp.json.return_value = mock_response
-        mock_resp.raise_for_status = MagicMock()
-        mock_client.post.return_value = mock_resp
-
+    patcher, client = _patch_judge([{"fact": "terminal Y", "present": True, "reason": "mentioned"}])
+    try:
         result = await answer_correctness(
             question="How do I wire X?",
             generated_answer="Wire X to terminal Y.",
             expected_answer="Wire X to terminal Y.",
             required_facts=["terminal Y"],
-            openai_api_key="test-key",
+            anthropic_api_key="test-key",
         )
+    finally:
+        patcher.stop()
 
     assert result["score"] == 1.0
     assert len(result["details"]) == 1
     assert result["details"][0]["present"] is True
+    assert client.messages.parse.call_args.kwargs["model"] == "claude-haiku-5-5"
 
 
 @pytest.mark.asyncio
 async def test_answer_correctness_partial_score():
     """Test partial score when some facts are missing."""
-    mock_response = {
-        "choices": [
-            {
-                "message": {
-                    "content": '{"results": [{"fact": "fact A", "present": true, "reason": "found"}, {"fact": "fact B", "present": false, "reason": "missing"}]}'
-                }
-            }
-        ]
-    }
-
-    with patch("eval.metrics.httpx.AsyncClient") as mock_client_cls:
-        mock_client = AsyncMock()
-        mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=False)
-
-        mock_resp = MagicMock()
-        mock_resp.json.return_value = mock_response
-        mock_resp.raise_for_status = MagicMock()
-        mock_client.post.return_value = mock_resp
-
+    patcher, _ = _patch_judge([
+        {"fact": "fact A", "present": True, "reason": "found"},
+        {"fact": "fact B", "present": False, "reason": "missing"},
+    ])
+    try:
         result = await answer_correctness(
             question="Test?",
             generated_answer="Only fact A here.",
             expected_answer="Both fact A and fact B.",
             required_facts=["fact A", "fact B"],
-            openai_api_key="test-key",
+            anthropic_api_key="test-key",
         )
+    finally:
+        patcher.stop()
 
     assert result["score"] == 0.5

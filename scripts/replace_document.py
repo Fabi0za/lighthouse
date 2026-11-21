@@ -86,7 +86,7 @@ async def replace_document(doc_id_str: str, pdf_path: str) -> None:
 
     # 5. Embed
     embedder = Embedder(
-        api_key=settings.openai_api_key,
+        api_key=settings.cohere_api_key,
         model=settings.embedding_model,
         dimensions=settings.embedding_dimensions,
     )

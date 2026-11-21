@@ -25,7 +25,7 @@ async def main():
 
     db = DatabaseClient()
     embedder = Embedder(
-        api_key=settings.openai_api_key,
+        api_key=settings.cohere_api_key,
         model=settings.embedding_model,
         dimensions=settings.embedding_dimensions,
     )

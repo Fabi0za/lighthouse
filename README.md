@@ -26,7 +26,7 @@ User Question → Query Parser → Vector Search (top-40) → Cohere Rerank (top
 | Retrieval recall | 100% |
 | Answer correctness | 84% |
 
-Evaluated with LLM-as-judge (GPT-4o-mini) against required facts per question.
+Evaluated with LLM-as-judge (GPT-4o-mini at the time, with OpenAI `text-embedding-3-small` embeddings) against required facts per question. The judge is now Claude Haiku 5.5 and embeddings are Cohere `embed-v4.0`; these results have not been re-measured since.
 
 The evaluated question set was built from a private document corpus and is not
 included here. `scripts/seed_eval_questions.py` ships a small set of generic
@@ -37,10 +37,11 @@ example questions instead — swap in your own to reproduce the workflow.
 - **Python 3.11** / FastAPI
 - **Supabase** (PostgreSQL + pgvector with HNSW index)
 - **Reducto API** for PDF parsing
-- **OpenAI** for embeddings (`text-embedding-3-small`, 1536d)
+- **Cohere** for embeddings (`embed-v4.0`, 1536d)
 - **Anthropic** for the LLM (`claude-sonnet-4-6`)
 - **Cohere** for neural re-ranking (`rerank-v3.5`)
-- LLM provider is configurable (Anthropic default, OpenAI optional)
+- **Claude Haiku 5.5** as the eval judge
+- LLM provider is configurable (Anthropic default; OpenAI optional, needs `OPENAI_API_KEY`)
 
 ## Setup
 
@@ -63,9 +64,8 @@ cp .env.example .env
 Required keys:
 - `SUPABASE_URL`, `SUPABASE_KEY`, `SUPABASE_SERVICE_KEY`
 - `REDUCTO_API_KEY`
-- `OPENAI_API_KEY` (embeddings)
-- `ANTHROPIC_API_KEY` (LLM)
-- `COHERE_API_KEY` (re-ranking)
+- `ANTHROPIC_API_KEY` (LLM and eval judge)
+- `COHERE_API_KEY` (embeddings and re-ranking)
 
 Defaults: `RETRIEVAL_TOP_K=40`, `RERANK_TOP_N=8`, `LLM_PROVIDER=anthropic`.
 
@@ -130,7 +130,7 @@ app/
 ├── ingestion/
 │   ├── parser.py          # Reducto PDF parser
 │   ├── chunker.py         # Table-aware, section-based chunking
-│   └── embedder.py        # OpenAI embeddings
+│   └── embedder.py        # Cohere embeddings
 ├── retrieval/
 │   ├── query_parser.py    # Grid provider detection
 │   ├── reranker.py        # Cohere neural reranker (+ legacy rule-based)
