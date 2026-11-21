@@ -191,7 +191,7 @@ Code that changes as a consequence: the reranker boost becomes "detected scope i
 
 The constraint, trigger and function tests above run against a real Postgres with pgvector, not mocks. The existing mocked unit tests stay as they are.
 
-**Chosen: a local Postgres with pgvector**, installed with Homebrew (`postgresql@17` and `pgvector`). This machine has no Docker. A separate test schema in the Supabase project was rejected: `schema.sql` writes to `public` and grants on it, so it would need parameterising; the tests would need the project's database password and network access; and test runs would share the project with the real corpus.
+**Chosen: a local Postgres with pgvector**, installed with Homebrew (`postgresql@18` and `pgvector`; Homebrew's pgvector is not built for 17). The local major version may differ from the Supabase project's; applying the schema and reloading the corpus there (Slice 1, Task 6) is the check against the real version. This machine has no Docker. A separate test schema in the Supabase project was rejected: `schema.sql` writes to `public` and grants on it, so it would need parameterising; the tests would need the project's database password and network access; and test runs would share the project with the real corpus.
 
 - The tests connect through `psycopg` using a `TEST_DATABASE_URL` environment variable. When it is unset they are skipped, so `pytest -q` stays green on a machine without Postgres.
 - Each test session creates a fresh database, creates the role `service_role` that Supabase normally provides, and applies `supabase/schema.sql` unchanged. Applying the real file is itself the test that the file loads.
