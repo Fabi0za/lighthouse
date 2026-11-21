@@ -174,6 +174,175 @@ create table eval_runs (
 );
 
 -- ---------------------------------------------------------------------------
+-- Version lifecycle. The Supabase client has no multi-statement transactions,
+-- so each swap is one function call.
+-- ---------------------------------------------------------------------------
+
+-- Make a pending, fully loaded version current; retire the previous current
+-- version and delete its chunks; move the source's address; resolve the flag.
+create function promote_version(p_document_id uuid, p_resolution text) returns void
+language plpgsql as $$
+declare
+    v documents;
+begin
+    select * into v from documents where id = p_document_id;
+    if not found then
+        raise exception 'document % not found', p_document_id;
+    end if;
+    perform 1 from sources where id = v.source_id for update;
+    select * into v from documents where id = p_document_id for update;
+    if v.status <> 'pending' then
+        raise exception 'document % is %, not pending', p_document_id, v.status;
+    end if;
+    if v.ingestion_status <> 'completed' then
+        raise exception 'document % is not loaded (ingestion_status %)', p_document_id, v.ingestion_status;
+    end if;
+
+    delete from document_chunks
+        where document_id in (select id from documents where source_id = v.source_id and status = 'current');
+    update documents set status = 'retired', retired_at = now()
+        where source_id = v.source_id and status = 'current';
+    update documents set status = 'current', became_current_at = now()
+        where id = p_document_id;
+    if v.address is not null then
+        update sources set address = v.address where id = v.source_id;
+    end if;
+    update flags set resolved_at = now(), resolution = p_resolution where id = v.flag_id;
+end $$;
+
+-- Retire a pending version that should not become current; delete its chunks; resolve the flag.
+create function reject_version(p_document_id uuid, p_resolution text) returns void
+language plpgsql as $$
+declare
+    v documents;
+begin
+    select * into v from documents where id = p_document_id for update;
+    if not found then
+        raise exception 'document % not found', p_document_id;
+    end if;
+    if v.status <> 'pending' then
+        raise exception 'document % is %, not pending', p_document_id, v.status;
+    end if;
+    delete from document_chunks where document_id = p_document_id;
+    update documents set status = 'retired', retired_at = now() where id = p_document_id;
+    update flags set resolved_at = now(), resolution = p_resolution where id = v.flag_id;
+end $$;
+
+-- Store an answer and the distinct versions its top-8 came from, in one transaction.
+create function log_answer(p_log jsonb, p_document_ids uuid[]) returns uuid
+language plpgsql as $$
+declare
+    v_id uuid;
+begin
+    insert into query_logs (question, detected_filters, retrieved_chunks, reranked_chunks,
+                            llm_prompt, llm_response, formatted_answer, model_used, latency_ms)
+    values (p_log->>'question',
+            coalesce(p_log->'detected_filters', '{}'),
+            coalesce(p_log->'retrieved_chunks', '[]'),
+            coalesce(p_log->'reranked_chunks', '[]'),
+            p_log->>'llm_prompt',
+            p_log->>'llm_response',
+            coalesce(p_log->'formatted_answer', '{}'),
+            p_log->>'model_used',
+            (p_log->>'latency_ms')::integer)
+    returning id into v_id;
+
+    insert into query_log_documents (query_log_id, document_id)
+        select distinct v_id, d from unnest(p_document_ids) as d;
+    return v_id;
+end $$;
+
+-- ---------------------------------------------------------------------------
+-- Search: current versions only
+-- ---------------------------------------------------------------------------
+create function match_document_chunks(
+    query_embedding vector(1536),
+    match_count integer default 20
+)
+returns table (
+    id uuid,
+    document_id uuid,
+    source_id uuid,
+    content text,
+    section_title text,
+    page_number integer,
+    chunk_index integer,
+    level text,
+    authority_rank integer,
+    scopes text[],
+    token_count integer,
+    similarity float,
+    document_title text
+)
+language sql stable
+as $$
+    select
+        dc.id,
+        dc.document_id,
+        s.id,
+        dc.content,
+        dc.section_title,
+        dc.page_number,
+        dc.chunk_index,
+        s.level,
+        s.authority_rank,
+        coalesce((select array_agg(ss.scope order by ss.scope)
+                  from source_scopes ss where ss.source_id = s.id), '{}'),
+        dc.token_count,
+        1 - (dc.embedding <=> query_embedding),
+        d.title
+    from document_chunks dc
+    join documents d on d.id = dc.document_id and d.status = 'current'
+    join sources s on s.id = d.source_id
+    order by dc.embedding <=> query_embedding
+    limit match_count;
+$$;
+
+create function keyword_search_chunks(
+    search_query text,
+    match_count integer default 20
+)
+returns table (
+    id uuid,
+    document_id uuid,
+    source_id uuid,
+    content text,
+    section_title text,
+    page_number integer,
+    chunk_index integer,
+    level text,
+    authority_rank integer,
+    scopes text[],
+    token_count integer,
+    rank float,
+    document_title text
+)
+language sql stable
+as $$
+    select
+        dc.id,
+        dc.document_id,
+        s.id,
+        dc.content,
+        dc.section_title,
+        dc.page_number,
+        dc.chunk_index,
+        s.level,
+        s.authority_rank,
+        coalesce((select array_agg(ss.scope order by ss.scope)
+                  from source_scopes ss where ss.source_id = s.id), '{}'),
+        dc.token_count,
+        ts_rank(dc.content_tsv, websearch_to_tsquery('german', search_query)),
+        d.title
+    from document_chunks dc
+    join documents d on d.id = dc.document_id and d.status = 'current'
+    join sources s on s.id = d.source_id
+    where dc.content_tsv @@ websearch_to_tsquery('german', search_query)
+    order by 12 desc
+    limit match_count;
+$$;
+
+-- ---------------------------------------------------------------------------
 -- Privileges for the backend role.
 -- The app connects with the secret key (sb_secret_...), which acts as service_role.
 -- On this project, tables created in the SQL editor were not readable by service_role

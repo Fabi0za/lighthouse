@@ -28,3 +28,5 @@ Each entry: what changed and why, then the evidence. Measurements live in [basel
   Evidence: results in [baseline.md](baseline.md).
 - **Fresh schema: documents are versions of sources, with scopes, flags and answer-to-version links; `hierarchy_rules` and the solar-specific columns removed.** Two versions of one source could both be searched, and nothing recorded which versions an answer used (see baseline).
   Evidence: 14 constraint and trigger tests against local Postgres 18 + pgvector pass (one current per source, pending needs a flag, immutable fingerprints, used versions undeletable); 87 others pass, 13 skip without `TEST_DATABASE_URL`.
+- **`promote_version`, `reject_version` and `log_answer` as SQL functions; both search functions return current versions only, with source level, rank and scopes.** Retire-then-promote as separate client calls could leave zero or two current versions, and an answer could be stored without its versions.
+  Evidence: 12 function tests on local Postgres pass, including a failed promotion that leaves the previous version current with its chunks, and search ignoring pending and retired chunks.
