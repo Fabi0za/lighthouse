@@ -44,7 +44,7 @@ Failure 1 cannot be made impossible: the store cannot act on, or flag, a version
 
 - *A. Retired versions keep their chunks, hidden by a status filter.* Instant rollback. But every search function must remember the filter, and retired chunks accumulate in the vector index (the EKZ archive alone has dozens of versions). pgvector applies a filter *after* the HNSW scan, so retired chunks would crowd the top-40 and silently shrink the result set.
 - *B. Retired versions keep record, fingerprints and parsed text; their chunks are deleted.* **Chosen.** Old text cannot reach the model even if a filter is missed, and the index holds only current (and briefly pending) chunks. The current-only filter stays in search, because a pending version's chunks exist while it is loaded and before it is promoted.
-  What B costs: rollback means re-chunking and re-embedding (minutes, cents); rebuilt chunks equal the originals only if chunker settings are unchanged; answer records cannot point at chunk rows; `scripts/experiments/version_baseline.py` needs V1.2 indexed and will need a scratch load (not solved here).
+  What B costs: rollback means re-chunking and re-embedding (minutes, cents); rebuilt chunks equal the originals only if chunker settings are unchanged; answer records cannot point at chunk rows; `scripts/experiments/version_baseline.py` needed V1.2 indexed; its stale mode now rebuilds V1.2's chunks in memory.
 
 **What an answer "used".**
 
@@ -237,7 +237,6 @@ The store is not touched, and the result matches the baseline's definition of th
 - **Retiring without a successor** (a source withdrawn) is not covered. Only replacement retires.
 - **Scopes sit on the source, not the version.** A new version that changes where it applies updates the source. Past answers keep their version references but not the scopes in force at the time.
 - **The loader matches sources by title**, since `sources` has no other key. Renaming a source's title in `corpus.yaml` creates a new source instead of a new version of the old one.
-- **`scripts/experiments/version_baseline.py`** relies on V1.2 being indexed and will need a scratch load after this change.
 
 ## Left to the builder
 

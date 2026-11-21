@@ -41,9 +41,9 @@ Each entry: what changed and why, then the evidence. Measurements live in [basel
 - **Loader option `--parsed-cache DIR`: a file `DIR/<pdf sha256>.json` is used as the parser output instead of parsing; the dry run says per version whether it would be skipped, read from the cache or parsed.** Reloading after the schema change must not re-parse: re-parsing costs Reducto credits and could change the text between the "before" and "after" baseline runs.
   Evidence: 6 new tests (cache hit never calls the parser, a miss parses, no directory parses, the dry run reports skip/cache/parse); 172 tests pass.
 - **`version_baseline.py` runs `current` (normal pipeline, logged with its versions) and `stale` (V1.2 rebuilt in memory from its retained parsed output); `nolabels` removed.** On the versioned store V1.2 has no chunks and two versions cannot reach the model together.
-  Evidence: 5 helper tests; after-runs in [baseline.md](baseline.md): current 6/6 follow V1.3 with all facts and no V1.2 text; stale unchanged.
-- **Corpus reloaded on the versioned store from the saved parser output; the first run hit Cohere's trial limit of 100,000 embedding tokens per minute and was completed by two reruns. The loader does not yet pace its embedding calls.** Recorded so the next reload expects it.
-  Evidence: run 1 promoted 5, failed 5, left 1 not attempted; reruns promoted the remaining 6, with the 5 failed pending versions dismissed and reloaded; afterwards 0 open flags and the dry run reports 11 skip.
+  Evidence: 5 helper tests; results in [baseline.md](baseline.md).
+- **The loader does not yet pace its embedding calls.** The reload onto the versioned store hit Cohere's trial limit of 100,000 embedding tokens per minute and was completed by rerunning; recorded so the next reload expects it.
+  Evidence: reload counts in [baseline.md](baseline.md), "Differences between before and after".
 - **A pending version must be held by an open flag of its own source, enforced by a trigger on `documents`.** The check alone accepted a resolved flag or another source's flag, so a held version could exist with no open flag (whole-branch review).
   Evidence: 4 schema tests on local Postgres: a resolved flag, another source's flag, and setting back to pending with a resolved flag fail; with an open flag it succeeds.
 - **The loader brings an existing source's issuer, level, listing address and scopes in line with `corpus.yaml` and says what changed.** Edits to an already-loaded source in `corpus.yaml` were silently ignored.

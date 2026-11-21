@@ -63,6 +63,7 @@ In every case the reranked top-8 was identical across the 3 runs of a question.
 
 - **Prompt labels:** each source line in the prompt shows the level (`national`, `operator`) where it showed the old type string (`general_regulation`, `grid_provider_rule`). The format `(Type: …, Priority: …)` and the priorities are unchanged.
 - **Identical text:** the reload read the parser output saved from the before store (`--parsed-cache`) instead of parsing again, so the parsed text and the chunks are the same. 1183 chunks before, 1156 after (V1.2's 27 deleted on retirement). The 2 V1.2 chunks recorded in earlier query logs match their rebuilt versions exactly.
+- **Reload:** the first run promoted 5 versions, failed 5 on Cohere's trial limit of 100,000 embedding tokens per minute, and left 1 not attempted (BKW V1.3, after V1.2 failed). Two reruns, one minute apart, promoted the remaining 6; afterwards 0 open flags. Output: `plans-local/reload*.log`.
 - **Embeddings:** all chunks were embedded again on reload with the same model and settings. The top-40 counts and top-8 makeup above match the before run; embedding values were not compared.
 
 ## Where the numbers come from

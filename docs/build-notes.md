@@ -40,6 +40,20 @@ Working notes for the build. Not for the README.
 
 - Two current documents of the same level disagree on the control circuit breaker. BKW Vorgaben V1.3 requires a spare mounting slot including a control circuit breaker; Technische Anforderungen zwecks Notfallsteuerung V1.1 says the relay connection does not need the unmetered breaker. In all 3 "current" runs of Q1 (see baseline) the model resolves it as general rule vs special case. Not a version problem, but the authority and conflict handling in "The bigger system" will meet it.
 
+## Known gaps
+
+From the whole-branch review of the versioned store (Slice 1), deferred:
+
+- `POST /ingest` does not validate `source_id`: an unknown or malformed id returns HTTP 500 with the database error instead of 404/422.
+- A content revert (A, then B, then A) is skipped or dismissed against the retired A, so B stays current with no open flag; reinstating is Slice 2.
+- An orphan flag left by a crash between the two inserts of `hold_version` has an empty `detail` and cannot be traced to its file.
+- The parsed-output cache is keyed on the full file's sha256 only, so it ignores `max_pages`; a cache file made with another page limit would be used silently.
+- `promote_version` reads the document's source before locking; harmless now, but once a pending version can move to another source it could lock the wrong one.
+- If marking a failed version as failed itself fails (database unreachable), that error hides the original one.
+- `eval_questions.required_source_docs` still holds document ids, which a reload invalidates.
+- The API has no authentication and is meant for local use only.
+- `POST /ingest` promotes every upload at once, including one from a new address, which the design treats as a candidate for a person. Until that is built, `scripts/load_corpus.py` is the supported way to load.
+
 ## What the surrounding system must provide
 
 - Every stored piece knows its source and version.

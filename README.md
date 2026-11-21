@@ -12,7 +12,7 @@ User Question → Query Parser → Vector Search (top-40) → Cohere Rerank (top
 
 - **Table-aware chunking**: preserves table structure, adds contextual headers (document title + section)
 - **Neural re-ranking**: Cohere rerank-v3.5 replaces rule-based scoring for better relevance
-- **Metadata-enriched retrieval**: chunks tagged with doc type, grid provider, hierarchy priority
+- **Versioned sources**: each document is a version of a watched source; search uses current versions only, retired versions are kept without chunks, and every answer records the versions it saw. Search results carry the source's level, priority and scopes
 - **Safety-first**: refuses to answer when context is insufficient rather than guessing
 - **Full trace logging**: every query logs retrieved chunks, reranked chunks, prompt, and response
 
@@ -73,6 +73,8 @@ Defaults: `RETRIEVAL_TOP_K=40`, `RERANK_TOP_N=8`, `LLM_PROVIDER=anthropic`.
 
 Run `supabase/schema.sql` in your Supabase SQL Editor to create tables, HNSW index, and search functions. The script ends with grants for `service_role` (the role behind the secret key); without them every query fails with `permission denied` (42501).
 
+`schema.sql` must be applied to an empty database: it creates tables and functions but drops nothing. On a project that has the old tables, drop them first (everything is reloadable from `corpus.yaml`). It also enables row level security on every table and limits the write functions to `service_role`.
+
 ### 4. Run
 
 ```bash
@@ -87,21 +89,23 @@ The API will be available at `http://localhost:8000`.
 |--------|------|-------------|
 | `POST` | `/query` | Ask a question, get a cited answer |
 | `GET` | `/query/{log_id}` | Retrieve full query trace |
-| `POST` | `/ingest` | Upload and process a PDF |
+| `POST` | `/ingest` | Load an uploaded PDF as a new version of an existing source (`source_id`, `title`, optional `address`) |
 | `GET` | `/documents` | List all documents |
-| `PUT` | `/documents/{id}` | Update document metadata |
-| `DELETE` | `/documents/{id}` | Delete document and its chunks |
+| `PUT` | `/documents/{id}` | Update a version's title |
 | `POST` | `/eval/run` | Run evaluation suite |
 | `GET` | `/eval/runs` | List evaluation runs |
+
+Versions are never deleted; a newer version retires the old one. The API has no authentication and is meant for local use only. `POST /ingest` makes every upload current at once, including one from a new address, which the design treats as a candidate for a person to decide; until that exists, `scripts/load_corpus.py` is the supported way to load.
 
 ## Scripts
 
 ```bash
-# Load every document in corpus.yaml (skips ones already loaded)
-python scripts/load_corpus.py [--dry-run]
-
-# Ingest a PDF
-python scripts/test_ingest.py <pdf_path> [title] [doc_type] [priority]
+# Load every source and version in corpus.yaml, oldest version first.
+# Versions are matched by content fingerprint: bytes already stored are skipped,
+# new bytes with the same text are dismissed, new content becomes current and
+# retires the previous version. Existing sources are updated to match corpus.yaml.
+# --parsed-cache DIR reads DIR/<pdf sha256>.json instead of calling the parser.
+python scripts/load_corpus.py [--dry-run] [--parsed-cache DIR]
 
 # Query the system
 python scripts/test_query.py "Your question here"
