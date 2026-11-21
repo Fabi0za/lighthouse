@@ -7,7 +7,7 @@ Hierarchical RAG system for electrical installation technical documents (German)
 ```
 PDF Upload → Reducto API → Table-Aware Chunking → Embeddings → Supabase pgvector (HNSW)
                                                                         │
-User Question → Query Parser → Vector Search (top-40) → Cohere Rerank (top-8) → GPT-4o → Cited Answer
+User Question → Query Parser → Vector Search (top-40) → Cohere Rerank (top-8) → Claude → Cited Answer
 ```
 
 - **Table-aware chunking**: preserves table structure, adds contextual headers (document title + section)
@@ -37,9 +37,10 @@ example questions instead — swap in your own to reproduce the workflow.
 - **Python 3.11** / FastAPI
 - **Supabase** (PostgreSQL + pgvector with HNSW index)
 - **Reducto API** for PDF parsing
-- **OpenAI** for embeddings (`text-embedding-3-small`, 1536d) and LLM (`gpt-4o`)
+- **OpenAI** for embeddings (`text-embedding-3-small`, 1536d)
+- **Anthropic** for the LLM (`claude-sonnet-4-6`)
 - **Cohere** for neural re-ranking (`rerank-v3.5`)
-- LLM provider is configurable (Anthropic/OpenAI)
+- LLM provider is configurable (Anthropic default, OpenAI optional)
 
 ## Setup
 
@@ -62,11 +63,11 @@ cp .env.example .env
 Required keys:
 - `SUPABASE_URL`, `SUPABASE_KEY`, `SUPABASE_SERVICE_KEY`
 - `REDUCTO_API_KEY`
-- `OPENAI_API_KEY`
-- `COHERE_API_KEY`
+- `OPENAI_API_KEY` (embeddings)
+- `ANTHROPIC_API_KEY` (LLM)
+- `COHERE_API_KEY` (re-ranking)
 
-Optional:
-- `ANTHROPIC_API_KEY` (if using Anthropic as LLM provider)
+Defaults: `RETRIEVAL_TOP_K=40`, `RERANK_TOP_N=8`, `LLM_PROVIDER=anthropic`.
 
 ### 3. Set up database
 
