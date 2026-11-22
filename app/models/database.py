@@ -108,6 +108,34 @@ class DatabaseClient:
         """A person rejects a held candidate."""
         self.client.rpc("reject_version", {"p_version_id": str(version_id)}).execute()
 
+    # --- flags a person handles -------------------------------------------
+
+    def hold_candidate(self, version_id: str, address: str, message: str | None) -> int:
+        """Hold a loaded version for a person under a candidate flag; returns the flag number."""
+        return self.client.rpc("hold_candidate", {
+            "p_version_id": str(version_id), "p_address": address, "p_message": message,
+        }).execute().data
+
+    def approve_candidate(self, version_id: str) -> int:
+        """A person approves a held candidate; returns how many answers saw the retired version."""
+        return self.client.rpc("approve_candidate", {"p_version_id": str(version_id)}).execute().data
+
+    def raise_check_failed(self, source_key: str, address: str, message: str | None) -> int:
+        """Report a watched address that cannot be reached; returns the flag number."""
+        return self.client.rpc("raise_check_failed", {
+            "p_source_key": source_key, "p_address": address, "p_message": message,
+        }).execute().data
+
+    def confirm_source(self, source_key: str) -> None:
+        """A person confirms the source; resolves its overdue flag."""
+        self.client.rpc("confirm_source", {"p_source_key": source_key}).execute()
+
+    def raise_overdue_flags(self, max_age_days: int) -> int:
+        """Flag sources not confirmed within max_age_days; returns how many flags were raised."""
+        return self.client.rpc(
+            "raise_overdue_flags", {"p_max_age": f"{int(max_age_days)} days"}
+        ).execute().data
+
     # --- chunks and search --------------------------------------------------
 
     def insert_chunks(self, chunks: list[dict[str, Any]]) -> None:

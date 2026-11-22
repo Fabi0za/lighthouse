@@ -185,3 +185,61 @@ def test_reject_requires_held(pg):
     d = make_version(pg, s, text_sha256="t1")
     with pytest.raises(errors.RaiseException):
         pg.execute("select reject_version(%s)", (d,))
+
+
+# --- candidates --------------------------------------------------------------
+
+def hold(conn, version_id, address="https://example.org/v2.pdf", message="new file name on the listing page"):
+    return conn.execute("select hold_candidate(%s, %s, %s)", (version_id, address, message)).fetchone()[0]
+
+
+def test_hold_then_approve_sets_watch_address_and_confirms(pg_db_url):
+    with psycopg.connect(pg_db_url) as conn:
+        s = make_source(conn, watch_address="https://example.org/v1.pdf")
+        current = begin(conn, s, file_sha256="f1")
+        promote(conn, current)
+        conn.commit()
+        before = conn.execute("select confirmed_at from sources where key = %s", (s,)).fetchone()[0]
+        v = begin(conn, s, file_sha256="f2", obtained_from="https://example.org/v2.pdf")
+        number = hold(conn, v)
+        assert doc(conn, v)["status"] == "held"
+        assert doc(conn, v)["flag_id"] == number
+        conn.commit()
+
+        assert conn.execute("select approve_candidate(%s)", (v,)).fetchone()[0] == 0
+        conn.commit()
+
+        assert doc(conn, v)["status"] == "current"
+        assert doc(conn, current)["status"] == "retired"
+        f = flag_of(conn, v)
+        assert (f["kind"], f["reason"], f["resolution"], f["resolved_by"]) == (
+            "candidate", "possible_successor", "promoted", "person")
+        assert f["detail"] == {"address": "https://example.org/v2.pdf", "message": "new file name on the listing page"}
+        watch, confirmed = conn.execute("select watch_address, confirmed_at from sources where key = %s",
+                                        (s,)).fetchone()
+        assert watch == "https://example.org/v2.pdf"
+        assert before is None or confirmed > before
+
+
+def test_approve_without_obtained_from_refused(pg):
+    s = make_source(pg, watch_address="https://example.org/v1.pdf")
+    v = begin(pg, s, obtained_from=None)
+    hold(pg, v)
+    with pytest.raises(errors.RaiseException):
+        pg.execute("select approve_candidate(%s)", (v,))
+
+
+def test_approve_requires_held(pg):
+    s = make_source(pg)
+    v = begin(pg, s, obtained_from="https://example.org/v2.pdf")
+    with pytest.raises(errors.RaiseException):
+        pg.execute("select approve_candidate(%s)", (v,))
+
+
+def test_reject_held_candidate_through_hold(pg):
+    s = make_source(pg)
+    v = begin(pg, s)
+    hold(pg, v)
+    pg.execute("select reject_version(%s)", (v,))
+    assert doc(pg, v)["status"] == "retired"
+    assert flag_of(pg, v)["resolution"] == "rejected"

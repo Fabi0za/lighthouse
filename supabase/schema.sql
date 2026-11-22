@@ -114,6 +114,10 @@ create table flags (
         and (detail ? 'file') = (reason in ('parse_failed', 'load_failed')))
 );
 
+-- A source is overdue for confirmation at most once at a time.
+create unique index flags_one_open_overdue_per_source
+    on flags (source_key) where kind = 'confirmation_overdue' and resolved_at is null;
+
 comment on column flags.detail is
     'Which file or address the flag is about, and an optional message for the person: '
     '{"file": "<path as listed in corpus.yaml>"} for parse_failed and load_failed, '
@@ -424,6 +428,101 @@ begin
         where id = v.flag_id;
 end $$;
 
+-- A loaded version that may succeed the current one is held for a person under a
+-- candidate flag, with the address where it was found and the evidence.
+create function hold_candidate(p_version_id uuid, p_address text, p_message text) returns bigint
+language plpgsql as $$
+declare
+    v versions;
+    v_flag bigint;
+begin
+    select * into v from versions where id = p_version_id for update;
+    if not found then
+        raise exception 'version % not found', p_version_id;
+    end if;
+    if v.status <> 'loading' then
+        raise exception 'version % is %, not loading', p_version_id, v.status;
+    end if;
+    -- the load succeeded, so an earlier failure of it is fixed
+    update flags set resolved_at = now(), resolution = 'fixed', resolved_by = 'system'
+        where id = v.flag_id and resolved_at is null;
+    insert into flags (source_key, kind, reason, detail)
+        values (v.source_key, 'candidate', 'possible_successor',
+                jsonb_strip_nulls(jsonb_build_object('address', p_address, 'message', p_message)))
+        returning id into v_flag;
+    update versions set status = 'held', flag_id = v_flag where id = p_version_id;
+    return v_flag;
+end $$;
+
+-- A person approves a held candidate: it becomes current, and the source's watch address
+-- moves to where the candidate was obtained, which confirms the source. Returns how many
+-- earlier answers saw the version that was retired.
+create function approve_candidate(p_version_id uuid) returns integer
+language plpgsql as $$
+declare
+    v versions;
+    v_seen integer;
+begin
+    select * into v from versions where id = p_version_id;
+    if not found then
+        raise exception 'version % not found', p_version_id;
+    end if;
+    if v.status <> 'held' then
+        raise exception 'version % is %, not held', p_version_id, v.status;
+    end if;
+    if v.obtained_from is null then
+        raise exception 'version % has no obtained_from address to watch', p_version_id;
+    end if;
+    v_seen := promote_version(p_version_id, 'person');
+    update sources set watch_address = v.obtained_from, confirmed_at = now() where key = v.source_key;
+    perform resolve_overdue(v.source_key);
+    return v_seen;
+end $$;
+
+-- What a monitor reports when a watched address cannot be reached or has moved.
+create function raise_check_failed(p_source_key text, p_address text, p_message text) returns bigint
+language sql as $$
+    insert into flags (source_key, kind, reason, detail)
+        values (p_source_key, 'check_failed', 'unreachable',
+                jsonb_strip_nulls(jsonb_build_object('address', p_address, 'message', p_message)))
+        returning id;
+$$;
+
+-- Resolve a source's open overdue flag once a person has confirmed it.
+create function resolve_overdue(p_source_key text) returns void
+language sql as $$
+    update flags set resolved_at = now(), resolution = 'confirmed', resolved_by = 'person'
+        where source_key = p_source_key and kind = 'confirmation_overdue' and resolved_at is null;
+$$;
+
+-- A person confirms that a source is still what is watched.
+create function confirm_source(p_source_key text) returns void
+language plpgsql as $$
+begin
+    update sources set confirmed_at = now() where key = p_source_key;
+    if not found then
+        raise exception 'source % not found', p_source_key;
+    end if;
+    perform resolve_overdue(p_source_key);
+end $$;
+
+-- Flag every source not confirmed within p_max_age (or never), once per source.
+-- Returns how many flags it raised. When to run it is up to whoever schedules it.
+create function raise_overdue_flags(p_max_age interval) returns integer
+language plpgsql as $$
+declare
+    n integer;
+begin
+    insert into flags (source_key, kind, reason, detail)
+        select s.key, 'confirmation_overdue', 'overdue', jsonb_build_object('address', s.watch_address)
+        from sources s
+        where (s.confirmed_at is null or s.confirmed_at < now() - p_max_age)
+          and not exists (select 1 from flags f where f.source_key = s.key
+                          and f.kind = 'confirmation_overdue' and f.resolved_at is null);
+    get diagnostics n = row_count;
+    return n;
+end $$;
+
 -- Store an answer and the distinct versions its top-8 came from, in one transaction.
 create function log_answer(p_answer jsonb, p_version_ids uuid[]) returns uuid
 language plpgsql as $$
@@ -463,6 +562,9 @@ begin
             confirmed_at = case
                 when sources.watch_address is distinct from excluded.watch_address then now()
                 else sources.confirmed_at end;
+    if (select confirmed_at from sources where key = p_key) = now() then
+        perform resolve_overdue(p_key);   -- adding the source or a new address confirms it
+    end if;
     delete from source_scopes where source_key = p_key and scope_key <> all (p_scopes);
     insert into source_scopes (source_key, scope_key)
         select p_key, unnest(p_scopes) on conflict do nothing;
@@ -551,5 +653,11 @@ revoke execute on function fail_load(uuid, text, text, text) from public, anon, 
 revoke execute on function discard_version(uuid) from public, anon, authenticated;
 revoke execute on function promote_version(uuid, text) from public, anon, authenticated;
 revoke execute on function reject_version(uuid) from public, anon, authenticated;
+revoke execute on function hold_candidate(uuid, text, text) from public, anon, authenticated;
+revoke execute on function approve_candidate(uuid) from public, anon, authenticated;
+revoke execute on function raise_check_failed(text, text, text) from public, anon, authenticated;
+revoke execute on function resolve_overdue(text) from public, anon, authenticated;
+revoke execute on function confirm_source(text) from public, anon, authenticated;
+revoke execute on function raise_overdue_flags(interval) from public, anon, authenticated;
 revoke execute on function log_answer(jsonb, uuid[]) from public, anon, authenticated;
 revoke execute on function save_source(text, text, text[], text) from public, anon, authenticated;

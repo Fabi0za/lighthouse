@@ -21,6 +21,12 @@ WRITE_FUNCTIONS = {
     "reject_version": "select reject_version(gen_random_uuid())",
     "log_answer": "select log_answer('{}'::jsonb, '{}'::uuid[])",
     "save_source": "select save_source('s', 'national', '{}'::text[], null)",
+    "hold_candidate": "select hold_candidate(gen_random_uuid(), 'u', null)",
+    "approve_candidate": "select approve_candidate(gen_random_uuid())",
+    "raise_check_failed": "select raise_check_failed('s', 'u', null)",
+    "resolve_overdue": "select resolve_overdue('s')",
+    "confirm_source": "select confirm_source('s')",
+    "raise_overdue_flags": "select raise_overdue_flags(interval '1 day')",
 }
 
 

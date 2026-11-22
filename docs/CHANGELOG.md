@@ -28,6 +28,8 @@ Each entry: what changed and why, then the evidence. Measurements live in [basel
   Evidence: database tests for each status and its flag rule; 271 tests pass with the database tests.
 - **Routine loads raise no flag; a failed load leaves a failed version with a `check_failed` flag (`parse_failed` or `load_failed`) naming the file as listed in `corpus.yaml`, and a later successful load of the same bytes resolves it.** Flags are for what a person must handle; "same content, different packaging: no flag" now holds by construction, and a crash mid-load no longer leaves an orphan flag.
   Evidence: real-database load tests: a routine load and a repackaged file leave no flag, a parser timeout gives `parse_failed`, an embedding failure gives `load_failed` and the retry resolves it `fixed` by `system`, a crashed load is resumed; 271 tests pass.
+- **A person approves or rejects a held candidate (approval moves the watch address to the candidate's address and confirms the source), a monitor can report an unreachable address, and sources unconfirmed for longer than a given age are flagged once each; confirming resolves that flag.** These are the brief's flagged cases; until now only the schema allowed them.
+  Evidence: database tests for hold and approve, approval refused without `obtained_from`, one open overdue flag per source, confirmation and a new watch address resolving it; 300 tests pass with the database tests.
 
 ## 2026-11-21
 

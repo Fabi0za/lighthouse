@@ -146,3 +146,34 @@ def test_removed_lifecycle_methods(db):
     for name in ("hold_version", "delete_pending_version", "update_version"):
         assert not hasattr(db, name), name
 
+
+def test_hold_candidate_calls_rpc(db, mock_supabase):
+    _rpc_returns(mock_supabase, 7)
+    assert db.hold_candidate("v1", "https://example.org/v2.pdf", "evidence") == 7
+    mock_supabase.rpc.assert_called_once_with("hold_candidate", {
+        "p_version_id": "v1", "p_address": "https://example.org/v2.pdf", "p_message": "evidence"})
+
+
+def test_approve_candidate_calls_rpc_and_returns_answer_count(db, mock_supabase):
+    _rpc_returns(mock_supabase, 2)
+    assert db.approve_candidate("v1") == 2
+    mock_supabase.rpc.assert_called_once_with("approve_candidate", {"p_version_id": "v1"})
+
+
+def test_raise_check_failed_calls_rpc(db, mock_supabase):
+    _rpc_returns(mock_supabase, 9)
+    assert db.raise_check_failed("s", "https://example.org/gone.pdf", "HTTP 404") == 9
+    mock_supabase.rpc.assert_called_once_with("raise_check_failed", {
+        "p_source_key": "s", "p_address": "https://example.org/gone.pdf", "p_message": "HTTP 404"})
+
+
+def test_confirm_source_calls_rpc(db, mock_supabase):
+    db.confirm_source("s")
+    mock_supabase.rpc.assert_called_once_with("confirm_source", {"p_source_key": "s"})
+
+
+def test_raise_overdue_flags_passes_days(db, mock_supabase):
+    _rpc_returns(mock_supabase, 3)
+    assert db.raise_overdue_flags(180) == 3
+    mock_supabase.rpc.assert_called_once_with("raise_overdue_flags", {"p_max_age": "180 days"})
+
