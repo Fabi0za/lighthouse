@@ -20,7 +20,8 @@ ROOT = Path(__file__).resolve().parent.parent
 RECORDED = {
     "app/generation/prompts.py": ("PROMPT_VERSION", 2, "edc6fdf619645034cddf45b19027a5b4e41a34ee12a94aa841b86f45c6263222"),
     "app/ingestion/fingerprint.py": ("FINGERPRINT_RULE", 1, "340022d8019f445ecd4fd9413e424804dd875a96afc3fb54246ae75aeb7b3970"),
-    "app/ingestion/chunker.py": ("CHUNKER_VERSION", 1, "552ef27c36e7584f83868573a7a2a093e86cedcdce99ea919b5da152a5d79a8d"),
+    "app/ingestion/parser.py": ("CHUNKER_VERSION", 2, "39c3c68eae055930fa1346d131f154aa14f07da54aeafea49a8b2425549ebcbd"),  # sections become chunks
+    "app/ingestion/chunker.py": ("CHUNKER_VERSION", 2, "baa0469266ad40e786a120adb99fd1f9f05f66cedb0fae1e0a6e40df21f52f33"),
 }
 
 
@@ -44,15 +45,17 @@ def test_chunker_version_matches_its_source():
 
 
 def test_guard_names_both_choices_when_the_file_changed(monkeypatch):
-    monkeypatch.setitem(RECORDED, "app/ingestion/chunker.py", ("CHUNKER_VERSION", 1, "0" * 64))
+    current = chunker.CHUNKER_VERSION
+    monkeypatch.setitem(RECORDED, "app/ingestion/chunker.py", ("CHUNKER_VERSION", current, "0" * 64))
     with pytest.raises(AssertionError) as e:
-        _check("app/ingestion/chunker.py", "CHUNKER_VERSION", 1)
+        _check("app/ingestion/chunker.py", "CHUNKER_VERSION", current)
     assert "raise CHUNKER_VERSION" in str(e.value) and "only re-record the hash" in str(e.value)
 
 
 def test_guard_fails_when_the_version_was_raised_without_recording(monkeypatch):
-    with pytest.raises(AssertionError, match="was recorded for 1"):
-        _check("app/ingestion/chunker.py", "CHUNKER_VERSION", 2)
+    current = chunker.CHUNKER_VERSION
+    with pytest.raises(AssertionError, match=f"was recorded for {current}"):
+        _check("app/ingestion/chunker.py", "CHUNKER_VERSION", current + 1)
 
 
 def test_prompt_version_matches_its_source():
@@ -62,3 +65,7 @@ def test_prompt_version_matches_its_source():
 def test_fingerprint_rule_matches_its_source():
     _check("app/ingestion/fingerprint.py", "FINGERPRINT_RULE", fingerprint.FINGERPRINT_RULE)
 
+
+
+def test_parser_sections_are_guarded_by_the_chunker_version():
+    _check("app/ingestion/parser.py", "CHUNKER_VERSION", chunker.CHUNKER_VERSION)

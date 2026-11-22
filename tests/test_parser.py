@@ -146,3 +146,27 @@ def test_sections_unchanged_by_strip_links():
     for f in cached:
         raw = json.loads(f.read_text(encoding="utf-8"))
         assert p._extract_sections(strip_links(raw)) == p._extract_sections(raw), f.name
+
+
+def _raw(*blocks):
+    return {"result": {"chunks": [{"blocks": [
+        {"type": t, "content": c, "bbox": {"page": p}} for t, c, p in blocks]}]}}
+
+
+def test_page_header_is_page_furniture():
+    raw = _raw(("Section Header", "4. Steuern oder Sperren", 1),
+               ("Text", "Neue Anlagen werden nicht mehr gesteuert.", 1),
+               ("Header", "BKW Energie AG Netzanschluss-Management", 2),
+               ("Text", "Der Steuer-Überstromunterbrecher ist vorzubereiten.", 2))
+    sections = ReductoParser(api_key="unused")._extract_sections(raw)
+    assert [s["title"] for s in sections] == ["4. Steuern oder Sperren"]  # no section starts at the header
+    assert "BKW Energie AG" not in sections[0]["content"]                # and its text is not content
+    assert "vorzubereiten" in sections[0]["content"]
+
+
+def test_old_rule_still_available_for_comparison():
+    from app.ingestion.parser import HEADING_TYPES, PAGE_FURNITURE
+    raw = _raw(("Header", "BKW Energie AG Netzanschluss", 1), ("Text", "Ein ausreichend langer Text.", 1))
+    old = ReductoParser(api_key="unused")._extract_sections(
+        raw, heading_types=HEADING_TYPES | {"Header"}, page_furniture=PAGE_FURNITURE - {"Header"})
+    assert [s["title"] for s in old] == ["BKW Energie AG Netzanschluss"]

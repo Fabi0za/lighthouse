@@ -60,6 +60,8 @@ Each entry: what changed and why, then the evidence. Measurements live in [basel
   Evidence: the vocabulary test now scans `prompts.py` with no exemption; a test that every rule is still in the system prompt; 429 tests pass with the database tests.
 - **The text fingerprint follows the starting rule: the parser's blocks in order with headings and short blocks, without page headers, footers, page numbers and figures; its rule version is stored in the indexing settings and their key.** The old rule ignored headings and short values, so a changed heading or limit made no new version, while footers could make a false one.
   Evidence: fingerprint tests per included and excluded block type; on the 11 cached parses: 11 distinct fingerprints, all changed from the old rule, V1.2 still differs from V1.3 (`scripts/experiments/fingerprint_check.py`, output in `plans-local/fingerprint-check.txt`); 436 tests pass.
+- **Page header blocks are page furniture: they no longer start a section or become chunk text; `CHUNKER_VERSION` is 2, and its guard covers the parser.** The parser treated the parser's `Header` blocks (letterhead, running titles, the BKW cover's version box) as section headings.
+  Evidence: parser tests; on the 11 cached parses sections go from 421 to 419 and chunks from 1183 to 1181 (`scripts/experiments/sections_check.py`, output in `plans-local/sections-check.txt`); 439 tests pass with the database tests.
 
 ## 2026-11-21
 

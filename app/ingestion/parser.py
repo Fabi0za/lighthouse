@@ -6,7 +6,10 @@ from typing import Any
 import httpx
 
 
-HEADER_TYPES = {"Title", "Section Header", "Header"}
+# Section extraction decides the chunks: a change here needs a decision on CHUNKER_VERSION
+# (tests/test_versioned_constants.py guards this file too).
+HEADING_TYPES = {"Title", "Section Header"}  # start a new section
+PAGE_FURNITURE = {"Header"}                  # page headers (letterhead, running titles): neither heading nor content
 MIN_BLOCK_LENGTH = 10  # Skip blocks shorter than this (OCR artefacts, icons)
 
 
@@ -171,7 +174,12 @@ class ReductoParser:
         sections = self._extract_sections(raw_output)
         return raw_output, sections
 
-    def _extract_sections(self, raw_output: dict[str, Any]) -> list[dict]:
+    def _extract_sections(
+        self,
+        raw_output: dict[str, Any],
+        heading_types: set[str] = HEADING_TYPES,
+        page_furniture: set[str] = PAGE_FURNITURE,
+    ) -> list[dict]:
         result = raw_output.get("result", {})
         chunks = result.get("chunks", [])
 
@@ -195,7 +203,9 @@ class ReductoParser:
             bbox = block.get("bbox", {})
             page = bbox.get("page", current_page)
 
-            if block_type in HEADER_TYPES:
+            if block_type in page_furniture:
+                continue
+            if block_type in heading_types:
                 # Save previous section if it has content
                 if current_content:
                     sections.append({
