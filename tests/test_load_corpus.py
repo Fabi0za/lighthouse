@@ -17,6 +17,8 @@ sys.modules["load_corpus"] = lc
 _spec.loader.exec_module(lc)
 
 ROOT = Path(__file__).resolve().parent.parent
+SETTINGS_ROW = {"key": "embed-v5.0-pro-1536-500-50-c1", "embedding_model": "embed-v5.0-pro", "dimensions": 1536,
+                "chunk_size": 500, "chunk_overlap": 50, "chunker_version": 1}
 
 REFERENCES = """
 levels:
@@ -47,6 +49,7 @@ def _corpus(tmp_path: Path, body: str) -> Path:
 def _db(**stored_source) -> MagicMock:
     db = MagicMock()
     db.list_source_keys.return_value = []
+    db.current_indexing_settings_keys.return_value = []
     db.find_source.return_value = stored_source or None
     return db
 
@@ -233,13 +236,15 @@ async def test_load_all_saves_references_and_sources_and_loads_versions_in_order
     calls = []
 
     async def fake_load(db_, source_key, file, title, obtained_from, *rest, version_label=None,
-                        max_pages=None, parsed_cache=None, listed_path=None):
+                        max_pages=None, parsed_cache=None, listed_path=None, indexing_settings_key=None):
+        assert indexing_settings_key == SETTINGS_ROW["key"]
         assert listed_path == file.name  # the path as written in corpus.yaml (relative to tmp_path)
         calls.append((source_key, file.name, version_label, max_pages))
         return "promoted", "d", None
 
-    counts = await lc.load_all(corpus, tmp_path, db, None, None, None, load=fake_load)
+    counts = await lc.load_all(corpus, tmp_path, db, None, None, None, indexing_settings=SETTINGS_ROW, load=fake_load)
 
+    db.save_indexing_settings.assert_called_once_with(SETTINGS_ROW)
     db.save_levels.assert_called_once_with([
         {"key": "national", "rank": 1, "requires_scope": False},
         {"key": "operator", "rank": 2, "requires_scope": True}])
@@ -263,7 +268,7 @@ async def test_stored_source_missing_from_corpus_stops_load(tmp_path):
     load = AsyncMock()
 
     with pytest.raises(ValueError, match="old-key"):
-        await lc.load_all(corpus, tmp_path, db, None, None, None, load=load)
+        await lc.load_all(corpus, tmp_path, db, None, None, None, indexing_settings=SETTINGS_ROW, load=load)
     load.assert_not_awaited()
     db.save_source.assert_not_called()
 
@@ -279,7 +284,7 @@ async def test_source_the_database_refuses_is_reported_and_others_still_load(tmp
         loaded.append(file.name)
         return "promoted", "d", None
 
-    counts = await lc.load_all(corpus, tmp_path, db, None, None, None, load=fake_load)
+    counts = await lc.load_all(corpus, tmp_path, db, None, None, None, indexing_settings=SETTINGS_ROW, load=fake_load)
 
     assert loaded == ["v1.pdf", "v2.pdf"]
     assert counts == {"failed": 1, "not attempted": 1, "promoted": 2}
@@ -292,13 +297,13 @@ async def test_load_all_stops_a_source_after_a_failure(tmp_path):
     loaded = []
 
     async def fake_load(db_, source_key, file, title, obtained_from, *rest, version_label=None,
-                        max_pages=None, parsed_cache=None, listed_path=None):
+                        max_pages=None, parsed_cache=None, listed_path=None, indexing_settings_key=None):
         loaded.append(file.name)
         if file.name == "v1.pdf":
             raise RuntimeError("boom")
         return "promoted", "d", None
 
-    counts = await lc.load_all(corpus, tmp_path, _db(), None, None, None, load=fake_load)
+    counts = await lc.load_all(corpus, tmp_path, _db(), None, None, None, indexing_settings=SETTINGS_ROW, load=fake_load)
 
     assert loaded == ["a.pdf", "v1.pdf"]  # v2 not loaded over a failed v1
     assert counts == {"promoted": 1, "failed": 1, "not attempted": 1}
@@ -315,7 +320,7 @@ async def test_load_all_uses_real_load_version_by_default(tmp_path, monkeypatch)
     corpus = lc.load_corpus(_corpus(tmp_path, ONE_SOURCE), tmp_path)
     fake = AsyncMock(return_value=("skipped", "d", None))
     monkeypatch.setattr(lc, "load_version", fake)
-    assert await lc.load_all(corpus, tmp_path, _db(), None, None, None) == {"skipped": 1}
+    assert await lc.load_all(corpus, tmp_path, _db(), None, None, None, indexing_settings=SETTINGS_ROW) == {"skipped": 1}
     fake.assert_awaited_once()
 
 
@@ -328,7 +333,7 @@ async def test_load_all_passes_cache_through(tmp_path):
         seen["cache"] = parsed_cache
         return "promoted", "d", None
 
-    await lc.load_all(corpus, tmp_path, _db(), None, None, None, load=fake_load, parsed_cache=tmp_path)
+    await lc.load_all(corpus, tmp_path, _db(), None, None, None, indexing_settings=SETTINGS_ROW, load=fake_load, parsed_cache=tmp_path)
     assert seen["cache"] == tmp_path
 
 
@@ -342,7 +347,7 @@ async def test_load_all_reports_changed_level_scopes_and_address(tmp_path, capsy
     operator_only = dataclasses.replace(corpus, sources=corpus.sources[1:])
     db = _db(key="op-rules", level="national", scopes=["x"], watch_address=None)
 
-    await lc.load_all(operator_only, tmp_path, db, None, None, None, load=_noop_load)
+    await lc.load_all(operator_only, tmp_path, db, None, None, None, indexing_settings=SETTINGS_ROW, load=_noop_load)
 
     db.save_source.assert_called_once_with("op-rules", "operator", ["x", "y"], "https://example.org/op.pdf")
     out = capsys.readouterr().out
@@ -360,8 +365,23 @@ async def test_load_all_says_how_many_answers_saw_the_retired_version(tmp_path, 
     async def fake_load(*args, **kwargs):
         return "promoted", "d", next(seen)
 
-    await lc.load_all(corpus, tmp_path, _db(), None, None, None, load=fake_load)
+    await lc.load_all(corpus, tmp_path, _db(), None, None, None, indexing_settings=SETTINGS_ROW, load=fake_load)
     out = capsys.readouterr().out
     assert out.count("seen by") == 1
     assert "the version it retired was seen by 3 earlier answers" in out
+
+
+async def test_load_stops_when_current_versions_use_other_settings(tmp_path):
+    _files(tmp_path)
+    corpus = lc.load_corpus(_corpus(tmp_path, GOOD), tmp_path)
+    db = _db()
+    db.current_indexing_settings_keys.return_value = ["old-key"]
+    load = AsyncMock()
+
+    with pytest.raises(ValueError) as e:
+        await lc.load_all(corpus, tmp_path, db, None, None, None, indexing_settings=SETTINGS_ROW, load=load)
+
+    assert "old-key" in str(e.value) and SETTINGS_ROW["key"] in str(e.value)
+    load.assert_not_awaited()
+    db.save_source.assert_not_called()
 

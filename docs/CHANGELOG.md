@@ -40,6 +40,8 @@ Each entry: what changed and why, then the evidence. Measurements live in [basel
   Evidence: database tests for the unique position, the required embedding and the empty title; prompt and formatter tests give "T (V1.3), Page 3"; 330 tests pass with the database tests.
 - **Chunks store their text without the `[title — section]` prefix; the embedding input is built from the columns with the same header, and the prompt shows each header once.** The title was copied into every chunk, and the model saw each header twice.
   Evidence: chunker, embedder, loader and prompt tests (embedded text `[Doc (V2) — S]` + text, stored text without it, one header per source in the prompt); 335 tests pass with the database tests.
+- **Every version records the indexing settings it was loaded with (embedding model, dimensions, chunk size, overlap, chunker version); the store refuses current versions under different settings, and the loader stops before loading when the configuration differs.** Chunks embedded under different settings cannot be compared in one search.
+  Evidence: database tests for the settings checks and for mixing (refused across sources, allowed for a lone source); a loader test stops before any load; a hash guard fails when `chunker.py` changes without a decision on `CHUNKER_VERSION`; 356 tests pass with the database tests.
 
 ## 2026-11-21
 

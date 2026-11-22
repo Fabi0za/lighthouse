@@ -12,9 +12,11 @@ psycopg = pytest.importorskip("psycopg")
 from psycopg import errors
 
 
-def begin(conn, source_key, file_sha256="f1", title="Doc", label=None, obtained_from=None, page_limit=None):
-    return str(conn.execute("select begin_load(%s, %s, %s, %s, %s, %s)",
-                            (source_key, title, label, obtained_from, page_limit, file_sha256)).fetchone()[0])
+def begin(conn, source_key, file_sha256="f1", title="Doc", label=None, obtained_from=None, page_limit=None,
+          settings="test-a"):
+    return str(conn.execute("select begin_load(%s, %s, %s, %s, %s, %s, %s)",
+                            (source_key, title, label, obtained_from, page_limit, file_sha256, settings)
+                            ).fetchone()[0])
 
 
 def fail(conn, version_id, reason="load_failed", file="data/a.pdf", message="rate limit"):

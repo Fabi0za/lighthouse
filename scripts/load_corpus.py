@@ -35,6 +35,7 @@ from app.ingestion.fingerprint import file_sha256
 from app.ingestion.parser import ReductoParser
 from app.ingestion.versions import cached_output, first_pages, load_version  # noqa: F401 - first_pages re-exported
 from app.models.database import DatabaseClient
+from app.settings_rows import indexing_settings_row
 
 SOURCE_FIELDS = ("key", "level")
 KEY_FORMAT = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")  # as checked by the sources table
@@ -224,13 +225,15 @@ def report_source(stored: dict | None, s: CorpusSource) -> None:
         print(f"updated source {s.key!r}: " + "; ".join(notes))
 
 
-async def load_all(corpus: Corpus, repo_root, db, parser, chunker, embedder, load=None,
-                   parsed_cache: Path | None = None) -> dict[str, int]:
-    """Save levels, scopes and sources, then load every version in order.
+async def load_all(corpus: Corpus, repo_root, db, parser, chunker, embedder, *,
+                   indexing_settings: dict, load=None, parsed_cache: Path | None = None) -> dict[str, int]:
+    """Save indexing settings, levels, scopes and sources, then load every version in order.
 
     Returns a count per action, plus 'failed' and 'not attempted'. Raises ValueError,
     before writing anything, if the store holds a source that corpus.yaml no longer
-    lists: a renamed key would otherwise leave the old source current and searchable.
+    lists (a renamed key would otherwise leave the old source current and searchable),
+    or if current versions were loaded under other indexing settings (chunks embedded
+    differently cannot share one search; changing settings needs a fresh store).
     """
     load = load or load_version
     listed = {s.key for s in corpus.sources}
@@ -240,6 +243,14 @@ async def load_all(corpus: Corpus, repo_root, db, parser, chunker, embedder, loa
             "stored sources not in corpus.yaml (a source key never changes; "
             f"restore them in corpus.yaml): {', '.join(unlisted)}"
         )
+    key = indexing_settings["key"]
+    other = [k for k in db.current_indexing_settings_keys() if k != key]
+    if other:
+        raise ValueError(
+            f"current versions use indexing settings {', '.join(other)}, the configuration gives {key}; "
+            "changing indexing settings needs a reload into a fresh store"
+        )
+    db.save_indexing_settings(indexing_settings)
     db.save_levels([{"key": lv.key, "rank": lv.rank, "requires_scope": lv.requires_scope}
                     for lv in corpus.levels])
     db.save_scopes([{"key": sc.key, "name": sc.name} for sc in corpus.scopes])
@@ -263,7 +274,7 @@ async def load_all(corpus: Corpus, repo_root, db, parser, chunker, embedder, loa
                 action, doc_id, retired_seen_by = await load(
                     db, s.key, repo_root / v.path, v.title, v.obtained_from,
                     parser, chunker, embedder, version_label=v.label, max_pages=v.max_pages,
-                    listed_path=v.path,
+                    listed_path=v.path, indexing_settings_key=key,
                     parsed_cache=parsed_cache,
                 )
             except Exception as e:  # noqa: BLE001 - report, then skip this source's later versions
@@ -319,6 +330,7 @@ async def main() -> int:
     )
     try:
         counts = await load_all(corpus, repo_root, db, parser, chunker, embedder,
+                                indexing_settings=indexing_settings_row(settings),
                                 parsed_cache=args.parsed_cache)
     except ValueError as e:
         print(e)

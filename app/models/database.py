@@ -43,6 +43,17 @@ class DatabaseClient:
         rows = self.client.table("sources").select("key").execute().data
         return sorted(row["key"] for row in rows)
 
+    def save_indexing_settings(self, row: dict[str, Any]) -> None:
+        self.client.table("indexing_settings").upsert(row, on_conflict="key").execute()
+
+    def current_indexing_settings_keys(self) -> list[str]:
+        """The indexing settings that current versions were loaded with (one, unless empty)."""
+        rows = (
+            self.client.table("versions").select("indexing_settings_key")
+            .eq("status", "current").execute().data
+        )
+        return sorted({row["indexing_settings_key"] for row in rows})
+
     def save_levels(self, rows: list[dict[str, Any]]) -> None:
         """Insert or update levels (key, rank, requires_scope)."""
         self.client.table("levels").upsert(rows, on_conflict="key").execute()
@@ -80,6 +91,7 @@ class DatabaseClient:
         obtained_from: str | None,
         page_limit: int | None,
         file_sha256: str,
+        indexing_settings_key: str,
     ) -> str:
         """Start loading a file as a version (status loading, no flag); returns the version id.
 
@@ -88,6 +100,7 @@ class DatabaseClient:
         return self.client.rpc("begin_load", {
             "p_source_key": source_key, "p_title": title, "p_version_label": version_label,
             "p_obtained_from": obtained_from, "p_page_limit": page_limit, "p_file_sha256": file_sha256,
+            "p_indexing_settings_key": indexing_settings_key,
         }).execute().data
 
     def set_text_fingerprint(self, version_id: str, text_sha256: str, parsed_output: dict[str, Any]) -> None:

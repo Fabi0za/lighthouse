@@ -6,10 +6,16 @@ from pypdf import PdfReader, PdfWriter
 
 from app.ingestion.chunker import Chunk
 from app.ingestion.fingerprint import file_sha256, text_sha256
-from app.ingestion.versions import first_pages, load_version
+from app.ingestion.versions import first_pages
+from app.ingestion.versions import load_version as _load_version
 
 SECTIONS = [{"title": "S", "content": "Steuerdraht 2 ist optional", "page": 1}]
 SOURCE = "src-1"
+SETTINGS_KEY = "embed-v5.0-pro-1536-500-50-c1"
+
+
+def load_version(*args, **kwargs):
+    return _load_version(*args, indexing_settings_key=SETTINGS_KEY, **kwargs)
 
 
 def _pdf(path: Path, pages: int = 1) -> Path:
@@ -52,7 +58,7 @@ async def test_new_file_promoted(tmp_path):
 
     assert (action, doc_id) == ("promoted", "new-doc")
     db.begin_load.assert_called_once_with(
-        "src-1", "Doc", "V2", "https://example.org/v2.pdf", None, file_sha256(f)
+        "src-1", "Doc", "V2", "https://example.org/v2.pdf", None, file_sha256(f), SETTINGS_KEY
     )
     db.set_text_fingerprint.assert_called_once_with("new-doc", text_sha256(SECTIONS), {"result": {"raw": True}})
     chunker.chunk_sections.assert_called_once_with(SECTIONS)

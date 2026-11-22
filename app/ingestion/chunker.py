@@ -5,6 +5,10 @@ from dataclasses import dataclass
 
 import tiktoken
 
+# Raise when a change to this file changes the chunks it makes: a new value means a new
+# indexing settings key and a full reload. tests/test_versioned_constants.py guards it.
+CHUNKER_VERSION = 1
+
 
 @dataclass
 class Chunk:

@@ -54,6 +54,7 @@ async def load_version(
     chunker,
     embedder,
     *,
+    indexing_settings_key: str,
     version_label: str | None = None,
     max_pages: int | None = None,
     parsed_cache: Path | None = None,
@@ -80,7 +81,8 @@ async def load_version(
         if v.get("file_sha256") == file_hash and v.get("status") not in UNFINISHED:
             return LoadResult("skipped", v["id"], None)
 
-    version_id = db.begin_load(source_key, title, version_label, obtained_from, max_pages, file_hash)
+    version_id = db.begin_load(source_key, title, version_label, obtained_from, max_pages, file_hash,
+                               indexing_settings_key)
     others = [v for v in versions if str(v["id"]) != str(version_id)]
     reason = "parse_failed"
     try:

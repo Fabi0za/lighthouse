@@ -9,7 +9,7 @@ psycopg = pytest.importorskip("psycopg")
 from psycopg import errors
 
 TABLES = {
-    "levels", "scopes", "sources", "source_scopes", "versions", "chunks", "flags",
+    "levels", "scopes", "indexing_settings", "sources", "source_scopes", "versions", "chunks", "flags",
     "answers", "answer_versions", "eval_questions", "eval_runs",
 }
 
@@ -107,7 +107,8 @@ def test_loading_needs_no_flag(pg):
 def test_held_needs_a_flag(pg):
     s = make_source(pg)
     with pytest.raises(errors.CheckViolation):
-        pg.execute("insert into versions (source_key, status, title, file_sha256) values (%s, 'held', 'D', 'f')",
+        pg.execute("insert into versions (source_key, status, title, file_sha256, indexing_settings_key) "
+                   "values (%s, 'held', 'D', 'f', 'test-a')",
                    (s,))
 
 

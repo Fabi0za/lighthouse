@@ -14,7 +14,7 @@ psycopg = pytest.importorskip("psycopg")
 from psycopg import errors
 
 WRITE_FUNCTIONS = {
-    "begin_load": "select begin_load('s', 't', null, null, null, 'f')",
+    "begin_load": "select begin_load('s', 't', null, null, null, 'f', 'k')",
     "fail_load": "select fail_load(gen_random_uuid(), 'load_failed', 'f', null)",
     "discard_version": "select discard_version(gen_random_uuid())",
     "promote_version": "select promote_version(gen_random_uuid())",

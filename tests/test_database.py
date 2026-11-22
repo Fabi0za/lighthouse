@@ -114,10 +114,11 @@ def _rpc_returns(mock_supabase, data):
 
 def test_begin_load_calls_rpc_and_returns_id(db, mock_supabase):
     _rpc_returns(mock_supabase, "v1")
-    assert db.begin_load("s", "Doc", "V2", "https://example.org/v2.pdf", 4, "abc") == "v1"
+    assert db.begin_load("s", "Doc", "V2", "https://example.org/v2.pdf", 4, "abc", "key-1") == "v1"
     mock_supabase.rpc.assert_called_once_with("begin_load", {
         "p_source_key": "s", "p_title": "Doc", "p_version_label": "V2",
-        "p_obtained_from": "https://example.org/v2.pdf", "p_page_limit": 4, "p_file_sha256": "abc"})
+        "p_obtained_from": "https://example.org/v2.pdf", "p_page_limit": 4, "p_file_sha256": "abc",
+        "p_indexing_settings_key": "key-1"})
 
 
 def test_fail_load_calls_rpc_and_returns_flag_number(db, mock_supabase):
@@ -200,4 +201,18 @@ def test_list_open_flags_with_held_versions(db, mock_supabase):
     mock_supabase.select.assert_called_with("*, versions(id)")
     mock_supabase.is_.assert_called_with("resolved_at", "null")
     mock_supabase.order.assert_called_with("id")
+
+
+def test_save_indexing_settings_upserts_on_key(db, mock_supabase):
+    row = {"key": "k", "embedding_model": "m"}
+    db.save_indexing_settings(row)
+    mock_supabase.table.assert_called_with("indexing_settings")
+    mock_supabase.upsert.assert_called_once_with(row, on_conflict="key")
+
+
+def test_current_indexing_settings_keys_are_distinct(db, mock_supabase):
+    mock_supabase.execute.return_value = MagicMock(data=[
+        {"indexing_settings_key": "b"}, {"indexing_settings_key": "a"}, {"indexing_settings_key": "b"}])
+    assert db.current_indexing_settings_keys() == ["a", "b"]
+    mock_supabase.eq.assert_called_with("status", "current")
 

@@ -13,13 +13,17 @@ import pytest
 from pypdf import PdfWriter
 
 from app.ingestion.chunker import Chunk
-from app.ingestion.versions import load_version
+from app.ingestion.versions import load_version as _load_version
 from tests.db.conftest import make_reference_rows
 
 psycopg = pytest.importorskip("psycopg")
 from psycopg.rows import dict_row
 
 VEC = [1.0] + [0.0] * 1535
+
+
+def load_version(*args, **kwargs):
+    return _load_version(*args, indexing_settings_key="test-a", **kwargs)
 SECTIONS = [{"title": "S", "content": "Steuerdraht 2 ist optional", "page": 1}]
 
 
@@ -39,9 +43,11 @@ class PgDb:
     def list_versions(self, source_key):
         return self.c.execute("select * from versions where source_key = %s", (source_key,)).fetchall()
 
-    def begin_load(self, source_key, title, version_label, obtained_from, page_limit, file_sha256):
-        return str(self._call("select begin_load(%s, %s, %s, %s, %s, %s) as id",
-                              (source_key, title, version_label, obtained_from, page_limit, file_sha256))["id"])
+    def begin_load(self, source_key, title, version_label, obtained_from, page_limit, file_sha256,
+                   indexing_settings_key):
+        return str(self._call("select begin_load(%s, %s, %s, %s, %s, %s, %s) as id",
+                              (source_key, title, version_label, obtained_from, page_limit, file_sha256,
+                               indexing_settings_key))["id"])
 
     def fail_load(self, version_id, reason, file, message):
         return self._call("select fail_load(%s, %s, %s, %s) as id", (version_id, reason, file, message))["id"]
@@ -166,7 +172,7 @@ async def test_failed_version_replaced_by_other_bytes_with_same_text(db, source,
 async def test_crash_while_loading_is_resumed(db, source, tmp_path):
     f = _pdf(tmp_path / "a.pdf", 200)
     from app.ingestion.fingerprint import file_sha256
-    db.begin_load(source, "Doc", None, None, None, file_sha256(f))  # then the process died
+    db.begin_load(source, "Doc", None, None, None, file_sha256(f), "test-a")  # then the process died
 
     action, _, _ = await load_version(db, source, f, "Doc", None, *_deps())
 

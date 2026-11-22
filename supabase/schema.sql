@@ -124,6 +124,21 @@ comment on column flags.detail is
     '{"address": "<url>"} for the other reasons; either may add "message": "<text>".';
 
 -- ---------------------------------------------------------------------------
+-- Indexing settings: what turns a version's text into searchable chunks. Rows are made
+-- from the app's configuration; the key names the values. Current versions never mix
+-- settings: chunks embedded differently cannot be compared in one search.
+-- ---------------------------------------------------------------------------
+create table indexing_settings (
+    key text primary key check (key ~ '^[a-z0-9.]+(-[a-z0-9.]+)*$'),
+    embedding_model text not null,
+    dimensions integer not null check (dimensions = 1536),  -- the width of chunks.embedding
+    chunk_size integer not null check (chunk_size > 0),
+    chunk_overlap integer not null check (chunk_overlap >= 0 and chunk_overlap < chunk_size),
+    chunker_version integer not null check (chunker_version > 0),  -- raised when chunking code changes
+    unique (embedding_model, dimensions, chunk_size, chunk_overlap, chunker_version)
+);
+
+-- ---------------------------------------------------------------------------
 -- Versions: one version of a source
 -- ---------------------------------------------------------------------------
 create table versions (
@@ -139,6 +154,7 @@ create table versions (
     version_label text,               -- version statement as printed on the cover; null if none
     obtained_from text,               -- where this version was obtained; never changes once set
     page_limit integer check (page_limit > 0),  -- only the first N pages were loaded; null = all
+    indexing_settings_key text not null references indexing_settings(key),
     file_sha256 text not null,        -- hash of the file bytes
     text_sha256 text,                 -- hash of normalised parsed text; decides "new version"
     parsed_output jsonb,              -- retained record of the version's content
@@ -168,8 +184,9 @@ begin
             using errcode = '23514';
     end if;
     if new.version_label is distinct from old.version_label
-       or new.page_limit is distinct from old.page_limit then
-        raise exception 'label and page limit of version % cannot change', old.id
+       or new.page_limit is distinct from old.page_limit
+       or new.indexing_settings_key is distinct from old.indexing_settings_key then
+        raise exception 'label, page limit and indexing settings of version % cannot change', old.id
             using errcode = '23514';
     end if;
     return new;
@@ -218,6 +235,29 @@ begin
     end if;
     return new;
 end $$;
+
+-- Current versions share one set of indexing settings.
+create function versions_no_mixed_settings() returns trigger
+language plpgsql as $$
+declare
+    other text;
+begin
+    if new.status = 'current' then
+        select indexing_settings_key into other from versions
+            where status = 'current' and source_key <> new.source_key
+              and indexing_settings_key <> new.indexing_settings_key
+            limit 1;
+        if found then
+            raise exception 'version % uses indexing settings %, but current versions use %',
+                new.id, new.indexing_settings_key, other using errcode = '23514';
+        end if;
+    end if;
+    return new;
+end $$;
+
+create trigger versions_no_mixed_settings
+    before insert or update of status on versions
+    for each row execute function versions_no_mixed_settings();
 
 create trigger versions_status_needs_flag
     before insert or update of status, flag_id, source_key on versions
@@ -299,7 +339,8 @@ create table eval_runs (
 -- a failure earlier), that version is taken up again; its flag, if any, stays open
 -- until the load succeeds.
 create function begin_load(p_source_key text, p_title text, p_version_label text,
-                           p_obtained_from text, p_page_limit integer, p_file_sha256 text)
+                           p_obtained_from text, p_page_limit integer, p_file_sha256 text,
+                           p_indexing_settings_key text)
 returns uuid
 language plpgsql as $$
 declare
@@ -307,6 +348,7 @@ declare
 begin
     select id into v_id from versions
         where source_key = p_source_key and file_sha256 = p_file_sha256
+          and indexing_settings_key = p_indexing_settings_key
           and status in ('loading', 'failed')
         for update;
     if found then
@@ -314,9 +356,10 @@ begin
         update versions set status = 'loading' where id = v_id;
         return v_id;
     end if;
-    insert into versions (source_key, status, title, version_label, obtained_from, page_limit, file_sha256)
+    insert into versions (source_key, status, title, version_label, obtained_from, page_limit, file_sha256,
+                          indexing_settings_key)
         values (p_source_key, 'loading', p_title, p_version_label, p_obtained_from, p_page_limit,
-                p_file_sha256)
+                p_file_sha256, p_indexing_settings_key)
         returning id into v_id;
     return v_id;
 end $$;
@@ -651,6 +694,7 @@ grant execute on all functions in schema public to service_role;
 -- anon and authenticated must exist (they do on Supabase; the test setup creates them).
 alter table levels enable row level security;
 alter table scopes enable row level security;
+alter table indexing_settings enable row level security;
 alter table sources enable row level security;
 alter table source_scopes enable row level security;
 alter table flags enable row level security;
@@ -661,7 +705,7 @@ alter table answer_versions enable row level security;
 alter table eval_questions enable row level security;
 alter table eval_runs enable row level security;
 
-revoke execute on function begin_load(text, text, text, text, integer, text) from public, anon, authenticated;
+revoke execute on function begin_load(text, text, text, text, integer, text, text) from public, anon, authenticated;
 revoke execute on function fail_load(uuid, text, text, text) from public, anon, authenticated;
 revoke execute on function discard_version(uuid) from public, anon, authenticated;
 revoke execute on function promote_version(uuid, text) from public, anon, authenticated;

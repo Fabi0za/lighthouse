@@ -76,7 +76,8 @@ def pg_db_url():
 # --- row helpers -------------------------------------------------------------
 
 def make_reference_rows(conn) -> None:
-    """Levels national (rank 1) and operator (rank 2, needs a scope); scopes bkw, ekz."""
+    """Levels national (rank 1) and operator (rank 2, needs a scope); scopes bkw, ekz;
+    indexing settings test-a and test-b."""
     conn.execute(
         "insert into levels (key, rank, requires_scope) values "
         "('national', 1, false), ('operator', 2, true) on conflict do nothing"
@@ -84,6 +85,11 @@ def make_reference_rows(conn) -> None:
     conn.execute(
         "insert into scopes (key, name) values ('bkw', 'BKW Energie AG'), "
         "('ekz', 'Elektrizitätswerke des Kantons Zürich') on conflict do nothing"
+    )
+    conn.execute(
+        "insert into indexing_settings (key, embedding_model, dimensions, chunk_size, chunk_overlap, "
+        "chunker_version) values ('test-a', 'm', 1536, 500, 50, 1), ('test-b', 'm', 1536, 400, 50, 1) "
+        "on conflict do nothing"
     )
 
 
@@ -124,6 +130,7 @@ def make_version(
     obtained_from: str | None = None,
     version_label: str | None = None,
     page_limit: int | None = None,
+    indexing_settings_key: str = "test-a",
 ) -> str:
     """A version; held gets an open candidate flag and failed a load_failed flag unless flag_id is given."""
     if flag_id is None and status == "held":
@@ -132,8 +139,8 @@ def make_version(
         flag_id = make_flag(conn, source_key, "check_failed", "load_failed", '{"file": "data/a.pdf"}')
     return str(conn.execute(
         "insert into versions (source_key, status, flag_id, title, version_label, obtained_from, "
-        "page_limit, file_sha256, text_sha256, retired_at) "
-        "values (%s, %s, %s, 'Doc', %s, %s, %s, %s, %s, %s) returning id",
+        "page_limit, file_sha256, text_sha256, retired_at, indexing_settings_key) "
+        "values (%s, %s, %s, 'Doc', %s, %s, %s, %s, %s, %s, %s) returning id",
         (source_key, status, flag_id, version_label, obtained_from, page_limit,
-         file_sha256 or uuid.uuid4().hex, text_sha256, retired_at),
+         file_sha256 or uuid.uuid4().hex, text_sha256, retired_at, indexing_settings_key),
     ).fetchone()[0])
