@@ -108,6 +108,18 @@ python scripts/load_corpus.py [--dry-run] [--parsed-cache DIR]
 
 # Query the system
 python scripts/ask.py "Your question here"
+
+# Flags a person handles: list them, approve or reject a held candidate, confirm a
+# source, raise overdue flags (CONFIRMATION_MAX_AGE_DAYS, default 180), report an
+# unreachable address.
+python scripts/flags.py list
+python scripts/flags.py approve VERSION_ID | reject VERSION_ID | confirm SOURCE_KEY
+python scripts/flags.py raise-overdue [--max-age-days N]
+python scripts/flags.py report-unreachable SOURCE_KEY ADDRESS [--message TEXT]
+
+# Answers that saw a version, newest first, with the other versions each saw
+python scripts/answers.py saw --source SOURCE_KEY --label "VERSION LABEL"
+python scripts/answers.py saw --version VERSION_ID
 ```
 
 ## Tests

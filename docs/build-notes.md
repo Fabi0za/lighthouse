@@ -41,12 +41,9 @@ Working notes for the build. Not for the README.
 
 ## Known gaps
 
-From the whole-branch review of the versioned store (Slice 1), deferred:
-
-- A content revert (A, then B, then A) is skipped or dismissed against the retired A, so B stays current with no open flag; reinstating is Slice 2.
-- An orphan flag left by a crash between the two inserts of `hold_version` has an empty `detail` and cannot be traced to its file.
+- **Next: reinstating a retired version (undo).** A content revert (A, then B, then A) is skipped against the retired A, so B stays current with no open flag; undoing a wrong promotion has the same gap. Both need a function that sets a retired version back to held under a candidate flag and rebuilds its chunks from `parsed_output`.
 - The parsed-output cache is keyed on the full file's sha256 only, so it ignores `max_pages`; a cache file made with another page limit would be used silently.
-- `promote_version` reads the document's source before locking; harmless now, but once a pending version can move to another source it could lock the wrong one.
+- `promote_version` reads the version's source before locking it; harmless while a version cannot move to another source.
 - If marking a failed version as failed itself fails (database unreachable), that error hides the original one.
 - `eval_questions.required_source_docs` still holds document ids, which a reload invalidates.
 - The API has no authentication and is meant for local use only.
