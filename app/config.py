@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     retrieval_top_k: int = 40
     rerank_top_n: int = 8
     rerank_model: str = "rerank-v3.5"
+    judge_model: str = "claude-haiku-5-5"  # judges eval answers against their facts
     embed_rate_limit_wait_seconds: int = 61  # wait after a rate-limit error before retrying a batch
     embed_rate_limit_retries: int = 5
     confirmation_max_age_days: int = 180  # a source not confirmed for longer is flagged overdue

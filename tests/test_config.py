@@ -39,3 +39,10 @@ def test_embedding_rate_limit_defaults(tmp_path):
     env.write_text(REQUIRED, encoding="utf-8")
     s = Settings(_env_file=env)
     assert (s.embed_rate_limit_wait_seconds, s.embed_rate_limit_retries) == (61, 5)
+
+
+def test_judge_model_default(tmp_path):
+    env = tmp_path / ".env"
+    env.write_text(REQUIRED, encoding="utf-8")
+    assert Settings(_env_file=env).judge_model == "claude-haiku-5-5"
+

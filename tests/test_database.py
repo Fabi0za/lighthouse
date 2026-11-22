@@ -230,3 +230,26 @@ def test_versions_seen_by_an_answer(db, mock_supabase):
     mock_supabase.table.assert_called_with("answer_versions")
     mock_supabase.eq.assert_called_with("answer_id", "a1")
 
+
+def test_get_eval_questions_with_sources_and_facts(db, mock_supabase):
+    mock_supabase.execute.return_value = MagicMock(data=[{
+        "key": "q", "question": "Q?", "question_type": "answerable", "case_type": "standard",
+        "expected_answer": "A.",
+        "eval_question_sources": [{"source_key": "s", "written_from_text_sha256": "t"}],
+        "eval_question_facts": [{"position": 2, "text": "b"}, {"position": 1, "text": "a"}]}])
+    (q,) = db.get_eval_questions()
+    assert q["sources"] == [{"source_key": "s", "written_from_text_sha256": "t"}]
+    assert q["facts"] == [{"position": 1, "text": "a"}, {"position": 2, "text": "b"}]
+    assert "eval_question_facts" not in q
+
+
+def test_record_eval_run_calls_rpc(db, mock_supabase):
+    _rpc_returns(mock_supabase, "run-1")
+    assert db.record_eval_run({"results": []}) == "run-1"
+    mock_supabase.rpc.assert_called_once_with("record_eval_run", {"p_run": {"results": []}})
+
+
+def test_list_eval_runs_reads_the_view(db, mock_supabase):
+    db.list_eval_runs()
+    mock_supabase.table.assert_called_with("eval_run_scores")
+

@@ -20,14 +20,14 @@ REFUSAL_PHRASES = [
 
 
 def retrieval_recall(
-    required_doc_ids: list[str],
+    required_source_keys: list[str],
     retrieved_chunks: list[dict[str, Any]],
 ) -> float:
-    if not required_doc_ids:
+    """Share of the required sources that at least one retrieved chunk came from."""
+    if not required_source_keys:
         return 1.0
-    retrieved_ids = {chunk.get("version_id") for chunk in retrieved_chunks}
-    found = sum(1 for doc_id in required_doc_ids if doc_id in retrieved_ids)
-    return found / len(required_doc_ids)
+    retrieved = {chunk.get("source_key") for chunk in retrieved_chunks}
+    return sum(1 for key in required_source_keys if key in retrieved) / len(required_source_keys)
 
 
 JUDGE_PROMPT = """You are an evaluation judge for a German technical RAG system. Your job is to check whether a generated answer contains specific required facts.
@@ -64,7 +64,7 @@ async def answer_correctness(
     expected_answer: str,
     required_facts: list[str],
     anthropic_api_key: str,
-    model: str = "claude-haiku-5-5",
+    model: str,
 ) -> dict[str, Any]:
     """Use LLM-as-judge to check if required facts are present in the answer."""
     if not required_facts:

@@ -44,28 +44,14 @@ def create_app(
 
     @app.post("/eval/run")
     async def run_eval(request: EvalRunRequest | None = None) -> dict[str, Any]:
-        if not all([db, pipeline]):
+        if not all([db, pipeline, settings]):
             raise HTTPException(status_code=503, detail="Pipeline not initialized")
-
-        config_snapshot = {}
-        if settings:
-            config_snapshot = {
-                "embedding_model": settings.embedding_model,
-                "llm_model": settings.llm_model,
-                "chunk_size": settings.chunk_size,
-                "chunk_overlap": settings.chunk_overlap,
-                "retrieval_top_k": settings.retrieval_top_k,
-                "rerank_top_n": settings.rerank_top_n,
-            }
-
-        notes = request.notes if request else None
-        judge_key = settings.anthropic_api_key if settings else None
         runner = EvalRunner(
             db=db,
             pipeline=pipeline,
-            config_snapshot=config_snapshot,
-            notes=notes,
-            anthropic_api_key=judge_key,
+            judge_model=settings.judge_model,
+            notes=request.notes if request else None,
+            anthropic_api_key=settings.anthropic_api_key or None,
         )
         return await runner.run()
 

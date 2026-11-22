@@ -204,10 +204,25 @@ class DatabaseClient:
     # --- evaluation ---------------------------------------------------------
 
     def get_eval_questions(self) -> list[dict[str, Any]]:
-        return self.client.table("eval_questions").select("*").execute().data
+        """Eval questions with their required sources and their facts in order."""
+        rows = (
+            self.client.table("eval_questions")
+            .select("*, eval_question_sources(source_key, written_from_text_sha256), "
+                    "eval_question_facts(position, text)")
+            .execute().data
+        )
+        questions = []
+        for row in rows:
+            q = {k: v for k, v in row.items() if k not in ("eval_question_sources", "eval_question_facts")}
+            q["sources"] = row.get("eval_question_sources") or []
+            q["facts"] = sorted(row.get("eval_question_facts") or [], key=lambda f: f["position"])
+            questions.append(q)
+        return questions
 
-    def insert_eval_run(self, run_data: dict[str, Any]) -> dict[str, Any]:
-        return self.client.table("eval_runs").insert(run_data).execute().data[0]
+    def record_eval_run(self, run: dict[str, Any]) -> str:
+        """Store a run with all its results, in one transaction. Returns the run id."""
+        return self.client.rpc("record_eval_run", {"p_run": run}).execute().data
 
     def list_eval_runs(self) -> list[dict[str, Any]]:
-        return self.client.table("eval_runs").select("*").execute().data
+        """Each run's scores, derived from its results."""
+        return self.client.table("eval_run_scores").select("*").execute().data

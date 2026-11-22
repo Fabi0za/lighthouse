@@ -48,6 +48,8 @@ Each entry: what changed and why, then the evidence. Measurements live in [basel
   Evidence: `strip_links` tests; on all 11 cached parser outputs the extracted sections are identical with and without the links; 370 tests pass with the database tests.
 - **Embedding waits out a rate-limit error and retries that batch (61 s, up to 5 times, both settings) instead of failing the load.** The last reload failed 5 versions on Cohere's per-minute limit and needed two reruns.
   Evidence: embedder tests: one rate-limit error is waited out, six give up after five waits, other errors are not retried, only the failing batch is re-sent; 375 tests pass with the database tests.
+- **Eval questions have readable keys, fixed question and case types, required sources by key with the version they were written from, and numbered facts; an eval run records its settings and judge model, one result per question linked to the answer it scored, and per-fact verdicts; scores are a view, and a failed judgement is recorded without a score instead of failing the run.** Results were JSON with document ids that a reload invalidated, nothing linked a score to its answer, and one judge error lost the whole run.
+  Evidence: database tests for each table, the review and score views (an unscored result is counted, never averaged as zero) and `record_eval_run`; runner tests (recall by source key, judge failure recorded and run continued, wrong verdict count); 414 tests pass with the database tests.
 
 ## 2026-11-21
 
