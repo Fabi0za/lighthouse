@@ -36,7 +36,7 @@ Eval questions live in `eval/questions.yaml` (format in `scripts/load_eval_quest
 - **Supabase** (PostgreSQL + pgvector with HNSW index)
 - **Reducto API** for PDF parsing
 - **Cohere** for embeddings (`embed-v5.0-pro`, 1536d via `output_dimension`)
-- **Anthropic** for the LLM (`claude-sonnet-4-6`)
+- **Anthropic** for the answer model (`claude-sonnet-5-5`)
 - **Cohere** for neural re-ranking (`rerank-v3.5`)
 - **Claude Haiku 5.5** as the eval judge
 

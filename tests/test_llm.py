@@ -6,11 +6,11 @@ from app.generation.llm import LLMClient
 
 @pytest.fixture
 def anthropic_client():
-    return LLMClient(api_key="test-key", model="claude-sonnet-4-6")
+    return LLMClient(api_key="test-key", model="claude-sonnet-5-5")
 
 
 def test_anthropic_client_init(anthropic_client):
-    assert anthropic_client.model == "claude-sonnet-4-6"
+    assert anthropic_client.model == "claude-sonnet-5-5"
 
 
 def test_llm_client_has_no_vendor_switch():

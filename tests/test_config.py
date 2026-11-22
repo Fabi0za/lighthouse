@@ -46,3 +46,15 @@ def test_judge_model_default(tmp_path):
     env.write_text(REQUIRED, encoding="utf-8")
     assert Settings(_env_file=env).judge_model == "claude-haiku-5-5"
 
+
+def test_default_answer_model(tmp_path):
+    env = tmp_path / ".env"
+    env.write_text(REQUIRED, encoding="utf-8")
+    assert Settings(_env_file=env).llm_model == "claude-sonnet-5-5"
+
+
+def test_env_example_names_the_default_answer_model():
+    from pathlib import Path
+    example = (Path(__file__).resolve().parent.parent / ".env.example").read_text(encoding="utf-8")
+    assert "LLM_MODEL=claude-sonnet-5-5" in example.splitlines()
+

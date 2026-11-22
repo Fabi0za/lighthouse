@@ -47,7 +47,7 @@ def mock_deps():
 
     llm = AsyncMock()
     llm.generate.return_value = "Wire X to terminal Y [Manual A, Wiring, Page 5].\n\nConfidence: high"
-    llm.model = "claude-sonnet-4-6"
+    llm.model = "claude-sonnet-5-5"
 
     formatter = MagicMock()
     formatter.format.return_value = {

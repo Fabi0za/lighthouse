@@ -52,6 +52,8 @@ Each entry: what changed and why, then the evidence. Measurements live in [basel
   Evidence: database tests for each table, the review and score views (an unscored result is counted, never averaged as zero) and `record_eval_run`; runner tests (recall by source key, judge failure recorded and run continued, wrong verdict count); 414 tests pass with the database tests.
 - **`scripts/load_eval_questions.py` loads eval questions from `eval/questions.yaml`, naming required versions by source key and printed label; the first two questions are the BKW baseline questions; once a question has results its question and facts cannot change; the old seed script is gone.** Questions referred to document ids, and the seed questions covered topics outside this corpus.
   Evidence: loader tests (label resolved to fingerprint, problems reported by question key before writing, missing file); database tests for replacing sources and facts and for the freeze once scored; 424 tests pass with the database tests.
+- **The default answer model is `claude-sonnet-5-5` in `config.py` and `.env.example`.** The defaults still named `claude-sonnet-4-6`, while the model actually configured and used for the baseline is `claude-sonnet-5-5`; the answer-settings key names the model.
+  Evidence: config tests for the default and `.env.example`; the answer-settings key test gives `top40-rerank8-rerank-v3.5-claude-sonnet-5-5-p1`.
 
 ## 2026-11-21
 

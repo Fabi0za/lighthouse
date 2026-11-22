@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     cohere_api_key: str = ""
     embedding_model: str = "embed-v5.0-pro"
     embedding_dimensions: int = 1536
-    llm_model: str = "claude-sonnet-4-6"
+    llm_model: str = "claude-sonnet-5-5"
     chunk_size: int = 500
     chunk_overlap: int = 50
     retrieval_top_k: int = 40

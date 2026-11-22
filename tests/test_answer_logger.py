@@ -14,7 +14,7 @@ def _log(logger, version_ids):
         llm_response="The answer is...",
         latency_ms=1234,
         indexing_settings_key="embed-v5.0-pro-1536-500-50-c1",
-        answer_settings_key="top40-rerank8-rerank-v3.5-claude-sonnet-4-6-p1",
+        answer_settings_key="top40-rerank8-rerank-v3.5-claude-sonnet-5-5-p1",
         version_ids=version_ids,
     )
 
@@ -32,7 +32,7 @@ def test_log_stores_answer_with_versions_in_one_call():
     assert call_data["detected_scope"] == "bkw"
     assert call_data["latency_ms"] == 1234
     assert call_data["indexing_settings_key"] == "embed-v5.0-pro-1536-500-50-c1"
-    assert call_data["answer_settings_key"] == "top40-rerank8-rerank-v3.5-claude-sonnet-4-6-p1"
+    assert call_data["answer_settings_key"] == "top40-rerank8-rerank-v3.5-claude-sonnet-5-5-p1"
     assert not {"model_used", "formatted_answer"} & set(call_data)
     assert ids == ["d1", "d2"]
     assert result == answer_id
