@@ -1,6 +1,6 @@
 """Load one file as a version of a source, identified by fingerprint, never by path.
 
-Shared by scripts/load_corpus.py and POST /ingest.
+Used by scripts/load_corpus.py.
 """
 from __future__ import annotations
 

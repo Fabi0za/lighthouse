@@ -1,23 +1,13 @@
 from __future__ import annotations
 
-import tempfile
 import uuid
-from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, HTTPException
 
 from app.config import Settings
-from app.ingestion.chunker import Chunker
-from app.ingestion.embedder import Embedder
-from app.ingestion.parser import ReductoParser
-from app.ingestion.versions import load_version
 from app.models.database import DatabaseClient
-from app.models.schemas import (
-    DocumentUpdate,
-    EvalRunRequest,
-    QueryRequest,
-)
+from app.models.schemas import EvalRunRequest, QueryRequest
 from app.pipeline import QueryPipeline
 from eval.runner import EvalRunner
 
@@ -25,9 +15,6 @@ from eval.runner import EvalRunner
 def create_app(
     pipeline: QueryPipeline | None = None,
     db: DatabaseClient | None = None,
-    parser: ReductoParser | None = None,
-    chunker: Chunker | None = None,
-    embedder: Embedder | None = None,
     settings: Settings | None = None,
 ) -> FastAPI:
     app = FastAPI(title="RAG Technical Knowledge Assistant")
@@ -52,40 +39,6 @@ def create_app(
         if db is None:
             raise HTTPException(status_code=503, detail="Database not initialized")
         return db.list_documents()
-
-    @app.put("/documents/{doc_id}")
-    def update_document(doc_id: uuid.UUID, update: DocumentUpdate) -> dict[str, Any]:
-        if db is None:
-            raise HTTPException(status_code=503, detail="Database not initialized")
-        updates = update.model_dump(exclude_none=True)
-        if not updates:
-            raise HTTPException(status_code=400, detail="No fields to update")
-        return db.update_document(doc_id, updates)
-
-    @app.post("/ingest")
-    async def ingest(
-        file: UploadFile = File(...),
-        source_id: str = Form(...),
-        title: str = Form(...),
-        address: str | None = Form(None),
-    ) -> dict[str, Any]:
-        """Load an uploaded file as a version of an existing source (see app/ingestion/versions.py)."""
-        if not all([db, parser, chunker, embedder]):
-            raise HTTPException(status_code=503, detail="Ingestion services not initialized")
-
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
-            tmp.write(await file.read())
-            tmp_path = Path(tmp.name)
-        try:
-            action, document_id = await load_version(
-                db, {"id": source_id}, tmp_path, title, address,
-                parser, chunker, embedder, stored_path=file.filename,
-            )
-            return {"action": action, "document_id": document_id}
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e))
-        finally:
-            tmp_path.unlink(missing_ok=True)
 
     @app.post("/eval/run")
     async def run_eval(request: EvalRunRequest | None = None) -> dict[str, Any]:

@@ -67,6 +67,15 @@ def test_get_query_log(client):
     assert "question" in response.json()
 
 
-def test_documents_cannot_be_deleted(client):
-    response = client.delete(f"/documents/{uuid.uuid4()}")
-    assert response.status_code == 405
+def test_ingest_is_gone(client):
+    assert client.post("/ingest").status_code == 404
+
+
+def test_documents_are_read_only(client):
+    """No route can change or delete a version: retired versions are the record."""
+    writes = [
+        (route.path, sorted(route.methods & {"POST", "PUT", "PATCH", "DELETE"}))
+        for route in client.app.routes
+        if route.path.startswith("/documents") and route.methods & {"POST", "PUT", "PATCH", "DELETE"}
+    ]
+    assert writes == []

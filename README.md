@@ -88,13 +88,11 @@ The API will be available at `http://localhost:8000`.
 |--------|------|-------------|
 | `POST` | `/query` | Ask a question, get a cited answer |
 | `GET` | `/query/{log_id}` | Retrieve full query trace |
-| `POST` | `/ingest` | Load an uploaded PDF as a new version of an existing source (`source_id`, `title`, optional `address`) |
 | `GET` | `/documents` | List all documents |
-| `PUT` | `/documents/{id}` | Update a version's title |
 | `POST` | `/eval/run` | Run evaluation suite |
 | `GET` | `/eval/runs` | List evaluation runs |
 
-Versions are never deleted; a newer version retires the old one. The API has no authentication and is meant for local use only. `POST /ingest` makes every upload current at once, including one from a new address, which the design treats as a candidate for a person to decide; until that exists, `scripts/load_corpus.py` is the supported way to load.
+Versions are never deleted; a newer version retires the old one. The API has no authentication and is meant for local use only. Versions are loaded with `scripts/load_corpus.py`.
 
 ## Scripts
 

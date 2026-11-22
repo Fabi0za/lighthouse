@@ -44,7 +44,6 @@ Working notes for the build. Not for the README.
 
 From the whole-branch review of the versioned store (Slice 1), deferred:
 
-- `POST /ingest` does not validate `source_id`: an unknown or malformed id returns HTTP 500 with the database error instead of 404/422.
 - A content revert (A, then B, then A) is skipped or dismissed against the retired A, so B stays current with no open flag; reinstating is Slice 2.
 - An orphan flag left by a crash between the two inserts of `hold_version` has an empty `detail` and cannot be traced to its file.
 - The parsed-output cache is keyed on the full file's sha256 only, so it ignores `max_pages`; a cache file made with another page limit would be used silently.
@@ -52,7 +51,6 @@ From the whole-branch review of the versioned store (Slice 1), deferred:
 - If marking a failed version as failed itself fails (database unreachable), that error hides the original one.
 - `eval_questions.required_source_docs` still holds document ids, which a reload invalidates.
 - The API has no authentication and is meant for local use only.
-- `POST /ingest` promotes every upload at once, including one from a new address, which the design treats as a candidate for a person. Until that is built, `scripts/load_corpus.py` is the supported way to load.
 
 ## What the surrounding system must provide
 

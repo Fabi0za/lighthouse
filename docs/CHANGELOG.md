@@ -8,6 +8,8 @@ Each entry: what changed and why, then the evidence. Measurements live in [basel
   Evidence: no references remain (`git grep`); 176 tests pass with the database tests.
 - **The answer model is Anthropic only; `SUPABASE_KEY`, `LLM_PROVIDER` and `OPENAI_API_KEY` are no longer settings.** The OpenAI path was switched off and the anon key was never read; a `.env` that still sets one now fails at startup, naming the key.
   Evidence: `tests/test_config.py` (each removed key gives exactly one `extra_forbidden` error on that key); 179 tests pass with the database tests.
+- **Remove `PUT /documents/{id}` and `POST /ingest`.** Renaming a version left its old title in every chunk, and an upload was promoted at once, even a candidate from a new address; `scripts/load_corpus.py` is the way to load.
+  Evidence: `test_documents_are_read_only` failed with the PUT route present and passes now; `test_ingest_is_gone`; 169 tests pass with the database tests.
 
 ## 2026-11-21
 

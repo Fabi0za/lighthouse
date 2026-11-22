@@ -1,9 +1,7 @@
 from app.config import get_settings
 from app.generation.formatter import ResponseFormatter
 from app.generation.llm import LLMClient
-from app.ingestion.chunker import Chunker
 from app.ingestion.embedder import Embedder
-from app.ingestion.parser import ReductoParser
 from app.logging.query_logger import QueryLogger
 from app.models.database import DatabaseClient
 from app.pipeline import QueryPipeline
@@ -16,8 +14,6 @@ def build_dependencies():
     settings = get_settings()
 
     db = DatabaseClient()
-    parser = ReductoParser(api_key=settings.reducto_api_key)
-    chunker = Chunker(chunk_size=settings.chunk_size, chunk_overlap=settings.chunk_overlap)
 
     embedder = Embedder(
         api_key=settings.cohere_api_key,
@@ -47,8 +43,5 @@ def build_dependencies():
     return {
         "db": db,
         "pipeline": pipeline,
-        "parser": parser,
-        "chunker": chunker,
-        "embedder": embedder,
         "settings": settings,
     }
