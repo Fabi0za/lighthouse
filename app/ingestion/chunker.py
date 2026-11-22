@@ -12,7 +12,6 @@ class Chunk:
     section_title: str
     page_number: int
     chunk_index: int
-    token_count: int
 
 
 class Chunker:
@@ -90,7 +89,6 @@ class Chunker:
                 section_title=section_title,
                 page_number=page_number,
                 chunk_index=start_index,
-                token_count=self._token_count(chunk_text),
             )]
 
         chunks: list[Chunk] = []
@@ -110,7 +108,6 @@ class Chunker:
                     section_title=section_title,
                     page_number=page_number,
                     chunk_index=chunk_idx,
-                    token_count=self._token_count(chunk_text),
                 ))
                 chunk_idx += 1
                 current_rows = []
@@ -127,7 +124,6 @@ class Chunker:
                 section_title=section_title,
                 page_number=page_number,
                 chunk_index=chunk_idx,
-                token_count=self._token_count(chunk_text),
             ))
 
         return chunks
@@ -164,7 +160,6 @@ class Chunker:
                 section_title=section_title,
                 page_number=page_number,
                 chunk_index=chunk_idx,
-                token_count=token_count,
             ))
             chunk_idx += 1
 
@@ -220,7 +215,6 @@ class Chunker:
                 for chunk in chunks:
                     header = f"[{doc_title} — {chunk.section_title}]\n"
                     chunk.content = header + chunk.content
-                    chunk.token_count = self._token_count(chunk.content)
             all_chunks.extend(chunks)
             idx += len(chunks)
         return all_chunks

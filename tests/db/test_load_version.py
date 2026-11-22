@@ -57,9 +57,9 @@ class PgDb:
         for ch in chunks:
             self.c.execute(
                 "insert into chunks (version_id, content, section_title, page_number, chunk_index, "
-                "embedding, token_count) values (%s, %s, %s, %s, %s, %s::vector, %s)",
+                "embedding) values (%s, %s, %s, %s, %s, %s::vector)",
                 (ch["version_id"], ch["content"], ch["section_title"], ch["page_number"],
-                 ch["chunk_index"], str(ch["embedding"]), ch["token_count"]))
+                 ch["chunk_index"], str(ch["embedding"])))
         self.c.commit()
 
     def promote_version(self, version_id, resolved_by="system"):
@@ -80,7 +80,7 @@ def _deps(fail_embedding: bool = False, fail_parse: bool = False):
         else AsyncMock(return_value=({"result": {}}, SECTIONS))
     chunker = MagicMock()
     chunker.chunk_sections.return_value = [
-        Chunk(content="c", section_title="S", page_number=1, chunk_index=0, token_count=3)]
+        Chunk(content="c", section_title="S", page_number=1, chunk_index=0)]
     embedder = MagicMock()
     embedder.embed_texts = AsyncMock(side_effect=RuntimeError("rate limit")) if fail_embedding \
         else AsyncMock(return_value=[VEC])

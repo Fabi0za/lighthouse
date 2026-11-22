@@ -41,7 +41,6 @@ def test_insert_chunks(db, mock_supabase):
         "page_number": 1,
         "chunk_index": 0,
         "embedding": [0.1] * 1536,
-        "token_count": 50,
     }]
     db.insert_chunks(chunks)
     mock_supabase.table.assert_called_with("chunks")

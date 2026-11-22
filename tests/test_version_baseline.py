@@ -46,7 +46,7 @@ def test_scratch_chunks_carry_version_and_source_fields():
     class Chunk:
         def __init__(self, i):
             self.content, self.section_title, self.page_number = f"text {i}", "S", 1
-            self.chunk_index, self.token_count = i, 3
+            self.chunk_index = i
 
     version = {"id": "v12", "title": "Doc", "version_label": "V1.2"}
     source_fields = {"source_key": "s", "level": "operator", "rank": 2, "scopes": ["bkw"]}

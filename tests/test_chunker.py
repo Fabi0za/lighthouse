@@ -24,7 +24,7 @@ def test_chunk_respects_size_limit():
     text = "word " * 200
     chunks = chunker.chunk_text(text, section_title="Test", page_number=1)
     for chunk in chunks:
-        assert chunk.token_count <= 55  # small tolerance
+        assert chunker._token_count(chunk.content) <= 55  # small tolerance
 
 
 def test_chunk_overlap():
@@ -58,3 +58,8 @@ def test_chunk_from_reducto_sections():
     wiring_chunks = [c for c in all_chunks if c.section_title == "Wiring"]
     assert len(wiring_chunks) > 1
     assert wiring_chunks[0].page_number == 3
+
+
+def test_chunk_has_no_token_count():
+    from app.ingestion.chunker import Chunk
+    assert "token_count" not in Chunk.__dataclass_fields__

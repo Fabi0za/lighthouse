@@ -36,6 +36,8 @@ Each entry: what changed and why, then the evidence. Measurements live in [basel
   Evidence: real-database test (an answer that saw V1 gives 1 when V2 is promoted); a first version reports nothing; 312 tests pass with the database tests.
 - **`scripts/flags.py` lists open flags and lets a person approve or reject a candidate, confirm a source, raise overdue flags (age from `CONFIRMATION_MAX_AGE_DAYS`, default 180, or `--max-age-days`), and report an unreachable address.** Every flag function needs a caller; this is a command line, not a review screen.
   Evidence: script tests for each subcommand, including the setting and its override; config tests for the default and an override; 322 tests pass with the database tests.
+- **Chunks lose `token_count`, need an embedding, have one row per position in a version, and may have an empty section title; citations then fall back to the page.** `token_count` was read by nothing, and "Untitled Section" was invented text stored as data.
+  Evidence: database tests for the unique position, the required embedding and the empty title; prompt and formatter tests give "T (V1.3), Page 3"; 330 tests pass with the database tests.
 
 ## 2026-11-21
 

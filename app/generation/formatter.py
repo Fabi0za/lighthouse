@@ -45,7 +45,7 @@ class ResponseFormatter:
                 seen.add(key)
                 sources.append({
                     "version_title": title,
-                    "section": chunk.get("section_title", "Unknown"),
+                    "section": chunk.get("section_title") or "",
                     "page": chunk.get("page_number", 0),
                 })
         return sources

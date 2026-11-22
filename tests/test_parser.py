@@ -111,4 +111,4 @@ async def test_parse_pdf_no_headers_uses_default(parser):
     ):
         raw_output, sections = await parser.parse_pdf("/tmp/test.pdf")
         assert len(sections) == 1
-        assert sections[0]["title"] == "Untitled Section"
+        assert sections[0]["title"] == ""  # no heading: empty, citations fall back to the page

@@ -52,3 +52,18 @@ def test_user_prompt_shows_title_and_label():
     chunk = {"content": "c", "section_title": "S", "page_number": 1, "level": "operator", "rank": 2,
              "version_title": "T", "version_label": "V1.3"}
     assert "[Source 1] T (V1.3) — S, Page 1" in build_user_prompt("q", [chunk])
+
+
+def test_source_line_with_and_without_section():
+    from app.generation.prompts import source_line
+    chunk = {"version_title": "T", "version_label": "V1.3", "section_title": "S", "page_number": 3}
+    assert source_line(chunk) == "T (V1.3) — S, Page 3"
+    assert source_line({**chunk, "section_title": ""}) == "T (V1.3), Page 3"
+
+
+def test_user_prompt_without_section_falls_back_to_page():
+    chunk = {"content": "c", "section_title": "", "page_number": 3, "level": "operator", "rank": 2,
+             "version_title": "T", "version_label": "V1.3"}
+    prompt = build_user_prompt("q", [chunk])
+    assert "[Source 1] T (V1.3), Page 3 (" in prompt
+    assert " — ," not in prompt

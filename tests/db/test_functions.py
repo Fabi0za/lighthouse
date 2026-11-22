@@ -13,11 +13,11 @@ from psycopg import errors
 VEC = "[" + ",".join(["1"] + ["0"] * 1535) + "]"
 
 
-def add_chunk(conn, doc_id: str, content: str = "Steuerdraht fuer Doppeltarif") -> str:
+def add_chunk(conn, doc_id: str, content: str = "Steuerdraht fuer Doppeltarif", chunk_index: int = 0) -> str:
     return str(conn.execute(
-        "insert into chunks (version_id, content, section_title, page_number, "
-        "chunk_index, embedding, token_count) values (%s, %s, 'S', 1, 0, %s::vector, 5) returning id",
-        (doc_id, content, VEC),
+        "insert into chunks (version_id, content, section_title, page_number, chunk_index, embedding) "
+        "values (%s, %s, 'S', 1, %s, %s::vector) returning id",
+        (doc_id, content, chunk_index, VEC),
     ).fetchone()[0])
 
 
@@ -86,9 +86,10 @@ def test_search_returns_source_fields_and_scopes(pg):
     cols = [c.name for c in cur.description]
     rows = [dict(zip(cols, r)) for r in cur.fetchall()]
     for col in ("id", "version_id", "source_key", "content", "section_title", "page_number",
-                "chunk_index", "level", "rank", "scopes", "token_count",
+                "chunk_index", "level", "rank", "scopes",
                 "version_title", "version_label"):
         assert col in cols, col
+    assert "token_count" not in cols
     by_source = {str(r["source_key"]): r for r in rows}
     assert sorted(by_source[a]["scopes"]) == ["bkw", "ekz"]
     assert by_source[b]["scopes"] == []

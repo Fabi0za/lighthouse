@@ -19,6 +19,14 @@ def display_title(title: str, version_label: str | None) -> str:
     return f"{title} ({version_label})" if version_label else title
 
 
+def source_line(chunk: dict[str, Any]) -> str:
+    """Where a chunk comes from: title and label, section if it has one, page."""
+    title = display_title(chunk.get("version_title", "Unknown Document"), chunk.get("version_label"))
+    section = chunk.get("section_title") or ""
+    page = chunk.get("page_number", "?")
+    return f"{title} — {section}, Page {page}" if section else f"{title}, Page {page}"
+
+
 def build_system_prompt() -> str:
     return SYSTEM_PROMPT
 
@@ -31,15 +39,12 @@ No relevant context documents were found. State that you have no relevant contex
 
     context_parts = []
     for i, chunk in enumerate(chunks, 1):
-        title = display_title(chunk.get("version_title", "Unknown Document"), chunk.get("version_label"))
-        section = chunk.get("section_title", "Unknown Section")
-        page = chunk.get("page_number", "?")
         priority = chunk.get("rank", 0)
         level = chunk.get("level", "unknown")
         content = chunk.get("content", "")
 
         context_parts.append(
-            f"[Source {i}] {title} — {section}, Page {page} (Type: {level}, Priority: {priority})\n{content}"
+            f"[Source {i}] {source_line(chunk)} (Type: {level}, Priority: {priority})\n{content}"
         )
 
     context_block = "\n\n---\n\n".join(context_parts)

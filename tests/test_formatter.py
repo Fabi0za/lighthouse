@@ -37,3 +37,8 @@ def test_sources_show_title_and_label():
     chunks = [{"version_title": "T", "version_label": "V1.3", "section_title": "S", "page_number": 1}]
     sources = ResponseFormatter().format("Antwort", chunks)["sources"]
     assert sources == [{"version_title": "T (V1.3)", "section": "S", "page": 1}]
+
+
+def test_formatter_section_empty_falls_back_to_page():
+    chunks = [{"version_title": "T", "section_title": "", "page_number": 3}]
+    assert ResponseFormatter().format("Antwort", chunks)["sources"] == [{"version_title": "T", "section": "", "page": 3}]

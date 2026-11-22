@@ -117,7 +117,6 @@ async def load_version(
                 "page_number": c.page_number,
                 "chunk_index": c.chunk_index,
                 "embedding": embeddings[i],
-                "token_count": c.token_count,
             }
             for i, c in enumerate(chunks)
         ])

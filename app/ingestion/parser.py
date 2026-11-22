@@ -164,7 +164,7 @@ class ReductoParser:
             return []
 
         sections: list[dict] = []
-        current_title = "Untitled Section"
+        current_title = ""  # text before the first heading has no section title
         current_content: list[str] = []
         current_page = 1
 
@@ -183,12 +183,12 @@ class ReductoParser:
                         "page": current_page,
                     })
                     current_content = []
-                current_title = content or "Untitled Section"
+                current_title = content or ""
                 current_page = page
             else:
                 if content.strip() and len(content.strip()) >= MIN_BLOCK_LENGTH:
                     current_content.append(_html_table_to_markdown(content))
-                if not sections and current_title == "Untitled Section":
+                if not sections and current_title == "":
                     current_page = page
 
         # Don't forget the last section

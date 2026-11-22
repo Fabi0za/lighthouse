@@ -335,3 +335,36 @@ def test_versions_have_no_file_path(pg):
     cols = {r[0] for r in pg.execute(
         "select column_name from information_schema.columns where table_name = 'versions'")}
     assert {"version_label", "page_limit", "obtained_from"} <= cols and "file_path" not in cols
+
+
+# --- chunks ------------------------------------------------------------------
+
+VEC = "[" + ",".join(["1"] + ["0"] * 1535) + "]"
+
+
+def _chunk(conn, version_id, chunk_index=0, embedding=VEC, section_title="S"):
+    conn.execute(
+        "insert into chunks (version_id, content, section_title, page_number, chunk_index, embedding) "
+        "values (%s, 'c', %s, 1, %s, %s::vector)", (version_id, section_title, chunk_index, embedding))
+
+
+def test_chunk_index_unique_per_version(pg):
+    v = make_version(pg, make_source(pg))
+    _chunk(pg, v, 0)
+    with pytest.raises(errors.UniqueViolation):
+        _chunk(pg, v, 0)
+
+
+def test_embedding_required(pg):
+    with pytest.raises(errors.NotNullViolation):
+        _chunk(pg, make_version(pg, make_source(pg)), embedding=None)
+
+
+def test_section_title_may_be_empty(pg):
+    _chunk(pg, make_version(pg, make_source(pg)), section_title="")
+
+
+def test_chunks_have_no_token_count(pg):
+    cols = {r[0] for r in pg.execute(
+        "select column_name from information_schema.columns where table_name = 'chunks'")}
+    assert "token_count" not in cols

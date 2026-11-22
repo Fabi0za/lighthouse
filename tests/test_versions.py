@@ -36,7 +36,7 @@ def _deps(existing: list[dict] | None = None, sections=SECTIONS, pages_seen: lis
     parser.parse_pdf = parse
     chunker = MagicMock()
     chunker.chunk_sections.return_value = [
-        Chunk(content="c1", section_title="S", page_number=1, chunk_index=0, token_count=3)
+        Chunk(content="c1", section_title="S", page_number=1, chunk_index=0)
     ]
     embedder = MagicMock()
     embedder.embed_texts = AsyncMock(return_value=[[0.1] * 1536])
@@ -100,7 +100,7 @@ async def test_chunk_records_have_no_removed_columns(tmp_path):
 
     record = db.insert_chunks.call_args.args[0][0]
     assert set(record) == {"version_id", "content", "section_title", "page_number",
-                           "chunk_index", "embedding", "token_count"}
+                           "chunk_index", "embedding"}
     assert record["version_id"] == "new-doc"
 
 

@@ -230,11 +230,11 @@ create table chunks (
     id uuid primary key default gen_random_uuid(),
     version_id uuid not null references versions(id) on delete cascade,
     content text not null,
-    section_title text not null,
+    section_title text not null default '',  -- empty when the text has no heading
     page_number integer not null,
     chunk_index integer not null,
-    embedding vector(1536),
-    token_count integer not null
+    embedding vector(1536) not null,
+    unique (version_id, chunk_index)
 );
 
 -- HNSW: no tuning needed at this size
@@ -603,7 +603,6 @@ returns table (
     level text,
     rank integer,
     scopes text[],
-    token_count integer,
     similarity float,
     version_title text,
     version_label text
@@ -622,7 +621,6 @@ as $$
         l.rank,
         coalesce((select array_agg(ss.scope_key order by ss.scope_key)
                   from source_scopes ss where ss.source_key = s.key), '{}'),
-        c.token_count,
         1 - (c.embedding <=> query_embedding),
         v.title,
         v.version_label

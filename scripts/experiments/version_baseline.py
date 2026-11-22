@@ -64,7 +64,6 @@ def scratch_chunks(chunks, embeddings, query_embedding, version: dict, source_fi
             "section_title": c.section_title,
             "page_number": c.page_number,
             "chunk_index": c.chunk_index,
-            "token_count": c.token_count,
             "version_title": version["title"],
             "version_label": version["version_label"],
             "similarity": cosine(e, query_embedding),
