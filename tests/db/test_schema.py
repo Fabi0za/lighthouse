@@ -10,7 +10,7 @@ from psycopg import errors
 
 TABLES = {
     "levels", "scopes", "indexing_settings", "answer_settings", "sources", "source_scopes", "versions", "chunks", "flags",
-    "answers", "answer_versions", "eval_questions", "eval_question_facts", "eval_question_sources", "eval_runs",
+    "answers", "answer_versions", "eval_questions", "eval_question_facts", "eval_question_sources", "eval_runs", "eval_results", "eval_fact_results",
 }
 
 

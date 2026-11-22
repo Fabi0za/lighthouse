@@ -21,6 +21,7 @@ WRITE_FUNCTIONS = {
     "reject_version": "select reject_version(gen_random_uuid())",
     "log_answer": "select log_answer('{}'::jsonb, '{}'::uuid[])",
     "save_source": "select save_source('s', 'national', '{}'::text[], null)",
+    "record_eval_run": "select record_eval_run('{}'::jsonb)",
     "hold_candidate": "select hold_candidate(gen_random_uuid(), 'u', null)",
     "approve_candidate": "select approve_candidate(gen_random_uuid())",
     "raise_check_failed": "select raise_check_failed('s', 'u', null)",
@@ -91,7 +92,7 @@ def test_service_role_reads_and_writes(pg):
     assert answer_id is not None
 
 
-VIEWS = {"eval_questions_to_review"}
+VIEWS = {"eval_questions_to_review", "eval_run_scores"}
 
 
 def test_views_run_with_the_callers_rights(pg):

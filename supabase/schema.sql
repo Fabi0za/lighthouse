@@ -360,14 +360,54 @@ create view eval_questions_to_review with (security_invoker = true) as
     left join versions cur on cur.source_key = qs.source_key and cur.status = 'current'
     where cur.text_sha256 is distinct from qs.written_from_text_sha256;
 
+-- One run of the eval questions, under the settings the answers were made with.
 create table eval_runs (
     id uuid primary key default gen_random_uuid(),
     run_at timestamptz not null default now(),
-    config_snapshot jsonb not null default '{}',
-    results jsonb not null default '[]',
-    aggregate_scores jsonb not null default '{}',
+    indexing_settings_key text not null references indexing_settings(key),
+    answer_settings_key text not null references answer_settings(key),
+    judge_model text not null,
     notes text
 );
+
+-- One result per question in a run, linked to the answer it scored. A failed judgement
+-- has no score and keeps the error; it is never counted as zero.
+create table eval_results (
+    run_id uuid not null references eval_runs(id) on delete cascade,
+    question_key text not null references eval_questions(key),
+    answer_id uuid not null references answers(id),
+    refusal_correct boolean not null,
+    retrieval_recall numeric check (retrieval_recall between 0 and 1),
+    answer_correctness numeric check (answer_correctness between 0 and 1),
+    judge_error text,
+    primary key (run_id, question_key),
+    check (judge_error is null or answer_correctness is null)
+);
+
+create table eval_fact_results (
+    run_id uuid not null,
+    question_key text not null,
+    position integer not null,
+    present boolean not null,
+    reason text,
+    primary key (run_id, question_key, position),
+    foreign key (run_id, question_key) references eval_results (run_id, question_key) on delete cascade,
+    foreign key (question_key, position) references eval_question_facts (question_key, position)
+);
+
+-- Scores of each run, derived from its results. Averages skip results without a value;
+-- scored counts judged results, not_scored the ones whose judgement failed.
+create view eval_run_scores with (security_invoker = true) as
+    select r.id as run_id, r.run_at,
+           count(e.question_key) as questions,
+           count(e.answer_correctness) as scored,
+           count(e.judge_error) as not_scored,
+           avg(e.refusal_correct::int) as refusal_accuracy,
+           avg(e.retrieval_recall) as retrieval_recall,
+           avg(e.answer_correctness) as answer_correctness
+    from eval_runs r
+    left join eval_results e on e.run_id = r.id
+    group by r.id, r.run_at;
 
 -- ---------------------------------------------------------------------------
 -- Version lifecycle. The Supabase client has no multi-statement transactions,
@@ -668,6 +708,31 @@ language sql stable as $$
     order by a.created_at desc;
 $$;
 
+-- Store an eval run with all its results and fact results, in one transaction.
+-- p_run: {indexing_settings_key, answer_settings_key, judge_model, notes,
+--         results: [{question_key, answer_id, refusal_correct, retrieval_recall,
+--                    answer_correctness, judge_error, facts: [{position, present, reason}]}]}
+create function record_eval_run(p_run jsonb) returns uuid
+language plpgsql as $$
+declare
+    v_id uuid;
+begin
+    insert into eval_runs (indexing_settings_key, answer_settings_key, judge_model, notes)
+        values (p_run->>'indexing_settings_key', p_run->>'answer_settings_key',
+                p_run->>'judge_model', p_run->>'notes')
+        returning id into v_id;
+    insert into eval_results (run_id, question_key, answer_id, refusal_correct, retrieval_recall,
+                              answer_correctness, judge_error)
+        select v_id, r->>'question_key', (r->>'answer_id')::uuid, (r->>'refusal_correct')::boolean,
+               (r->>'retrieval_recall')::numeric, (r->>'answer_correctness')::numeric, r->>'judge_error'
+        from jsonb_array_elements(coalesce(p_run->'results', '[]')) as r;
+    insert into eval_fact_results (run_id, question_key, position, present, reason)
+        select v_id, r->>'question_key', (f->>'position')::integer, (f->>'present')::boolean, f->>'reason'
+        from jsonb_array_elements(coalesce(p_run->'results', '[]')) as r,
+             jsonb_array_elements(coalesce(r->'facts', '[]')) as f;
+    return v_id;
+end $$;
+
 -- ---------------------------------------------------------------------------
 -- Search: current versions only
 -- ---------------------------------------------------------------------------
@@ -747,6 +812,8 @@ alter table eval_questions enable row level security;
 alter table eval_question_facts enable row level security;
 alter table eval_question_sources enable row level security;
 alter table eval_runs enable row level security;
+alter table eval_results enable row level security;
+alter table eval_fact_results enable row level security;
 
 revoke execute on function begin_load(text, text, text, text, integer, text, text) from public, anon, authenticated;
 revoke execute on function fail_load(uuid, text, text, text) from public, anon, authenticated;
@@ -761,3 +828,4 @@ revoke execute on function confirm_source(text) from public, anon, authenticated
 revoke execute on function raise_overdue_flags(interval) from public, anon, authenticated;
 revoke execute on function log_answer(jsonb, uuid[]) from public, anon, authenticated;
 revoke execute on function save_source(text, text, text[], text) from public, anon, authenticated;
+revoke execute on function record_eval_run(jsonb) from public, anon, authenticated;
