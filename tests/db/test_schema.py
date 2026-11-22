@@ -48,7 +48,7 @@ def test_pending_requires_flag(pg):
     s = make_source(pg)
     with pytest.raises(errors.CheckViolation):
         pg.execute(
-            "insert into versions (source_id, status, title, file_sha256) "
+            "insert into versions (source_key, status, title, file_sha256) "
             "values (%s, 'pending', 'Doc', 'f')",
             (s,),
         )
@@ -105,13 +105,13 @@ def test_used_version_not_deletable(pg):
 
 def test_scopes_many_per_source(pg):
     s = make_source(pg)
-    pg.execute("insert into source_scopes (source_id, scope_key) values (%s, 'bkw'), (%s, 'ekz')", (s, s))
-    n = pg.execute("select count(*) from source_scopes where source_id = %s", (s,)).fetchone()[0]
+    pg.execute("insert into source_scopes (source_key, scope_key) values (%s, 'ekz')", (s,))
+    n = pg.execute("select count(*) from source_scopes where source_key = %s", (s,)).fetchone()[0]
     assert n == 2
 
 
-def _resolved_flag(conn, source_id):
-    f = make_flag(conn, source_id)
+def _resolved_flag(conn, source_key):
+    f = make_flag(conn, source_key)
     conn.execute("update flags set resolved_at = now(), resolution = 'done' where id = %s", (f,))
     return f
 
@@ -123,7 +123,7 @@ def test_pending_rejects_resolved_flag(pg):
 
 
 def test_pending_rejects_other_sources_flag(pg):
-    s, other = make_source(pg, title="A"), make_source(pg, title="B")
+    s, other = make_source(pg, key="a"), make_source(pg, key="b")
     with pytest.raises(errors.CheckViolation):
         make_version(pg, s, flag_id=make_flag(pg, other))
 
@@ -152,13 +152,13 @@ def test_reinstating_to_pending_with_open_flag_succeeds(pg):
 def test_level_must_exist(pg):
     make_reference_rows(pg)
     with pytest.raises(errors.ForeignKeyViolation):
-        pg.execute("insert into sources (title, issuer, level) values ('t', 'i', 'x')")
+        pg.execute("insert into sources (key, level) values ('t', 'x')")
 
 
 def test_scope_must_exist(pg):
     s = make_source(pg)
     with pytest.raises(errors.ForeignKeyViolation):
-        pg.execute("insert into source_scopes (source_id, scope_key) values (%s, 'x')", (s,))
+        pg.execute("insert into source_scopes (source_key, scope_key) values (%s, 'x')", (s,))
 
 
 def test_rank_unique(pg):
@@ -179,4 +179,69 @@ def test_rank_direction_is_stated(pg):
 def test_scope_key_format(pg, key):
     with pytest.raises(errors.CheckViolation):
         pg.execute("insert into scopes (key, name) values (%s, 'n')", (key,))
+
+
+# --- source keys -------------------------------------------------------------
+
+@pytest.mark.parametrize("key", ["BKW Vorgaben", "bkw_vorgaben", "bkw--vorgaben", "-bkw", "bkw-"])
+def test_source_key_format_rejected(pg, key):
+    make_reference_rows(pg)
+    with pytest.raises(errors.CheckViolation):
+        pg.execute("insert into sources (key, level) values (%s, 'national')", (key,))
+
+
+def test_source_key_format_accepted(pg):
+    make_reference_rows(pg)
+    pg.execute("insert into sources (key, level) values ('bkw-vorgaben-niederspannung', 'national')")
+
+
+def test_source_key_immutable(pg):
+    s = make_source(pg, level="national")
+    with pytest.raises(errors.CheckViolation):
+        pg.execute("update sources set key = 'other' where key = %s", (s,))
+
+
+def _save(conn, key, level, scopes):
+    conn.execute("select save_source(%s, %s, %s::text[])", (key, level, scopes))
+
+
+def _scopes(conn, key):
+    return sorted(r[0] for r in conn.execute(
+        "select scope_key from source_scopes where source_key = %s", (key,)))
+
+
+def test_operator_source_needs_scope(pg_db_url):
+    with psycopg.connect(pg_db_url) as conn:
+        make_reference_rows(conn)
+        conn.commit()
+        _save(conn, "s", "operator", [])
+        with pytest.raises(errors.CheckViolation):
+            conn.commit()
+
+
+def test_removing_last_scope_of_operator_source_fails(pg_db_url):
+    with psycopg.connect(pg_db_url) as conn:
+        make_reference_rows(conn)
+        _save(conn, "s", "operator", ["bkw"])
+        conn.commit()
+        conn.execute("delete from source_scopes where source_key = 's'")
+        with pytest.raises(errors.CheckViolation):
+            conn.commit()
+
+
+def test_national_source_without_scope(pg_db_url):
+    with psycopg.connect(pg_db_url) as conn:
+        make_reference_rows(conn)
+        _save(conn, "n", "national", [])
+        conn.commit()
+
+
+def test_save_source_replaces_scopes_and_level(pg):
+    make_reference_rows(pg)
+    _save(pg, "s", "operator", ["bkw"])
+    _save(pg, "s", "operator", ["ekz"])
+    assert _scopes(pg, "s") == ["ekz"]
+    _save(pg, "s", "national", [])
+    assert _scopes(pg, "s") == []
+    assert pg.execute("select level from sources where key = 's'").fetchone()[0] == "national"
 

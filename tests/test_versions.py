@@ -9,7 +9,7 @@ from app.ingestion.fingerprint import file_sha256, text_sha256
 from app.ingestion.versions import first_pages, load_version
 
 SECTIONS = [{"title": "S", "content": "Steuerdraht 2 ist optional", "page": 1}]
-SOURCE = {"id": "src-1"}
+SOURCE = "src-1"
 
 
 def _pdf(path: Path, pages: int = 1) -> Path:

@@ -25,30 +25,72 @@ create table scopes (
 -- ---------------------------------------------------------------------------
 -- Sources: a watched publication
 -- ---------------------------------------------------------------------------
+-- The key is how people and corpus.yaml name a source: publisher-publication,
+-- lowercase, no version or year. It never changes.
 create table sources (
-    id uuid primary key default gen_random_uuid(),
-    title text not null,
-    issuer text not null,
+    key text primary key check (key ~ '^[a-z0-9]+(-[a-z0-9]+)*$'),
     level text not null references levels(key),
     address text unique,              -- address watched now; moves on promotion
-    listing_address text,             -- page that links to the file
     confirmed_at timestamptz,         -- last confirmed by a person; null = never
     created_at timestamptz not null default now()
 );
 
 -- Where a source applies. No rows = applies everywhere.
 create table source_scopes (
-    source_id uuid not null references sources(id) on delete cascade,
+    source_key text not null references sources(key) on delete cascade,
     scope_key text not null references scopes(key),
-    primary key (source_id, scope_key)
+    primary key (source_key, scope_key)
 );
+
+create function sources_key_immutable() returns trigger
+language plpgsql as $$
+begin
+    if new.key is distinct from old.key then
+        raise exception 'source key % cannot change', old.key using errcode = '23514';
+    end if;
+    return new;
+end $$;
+
+create trigger sources_key_immutable
+    before update on sources
+    for each row execute function sources_key_immutable();
+
+-- A source whose level requires a scope has at least one, checked at commit so that
+-- a source and its scopes can be written in one transaction (save_source).
+create function sources_scope_required() returns trigger
+language plpgsql as $$
+declare
+    k text;
+begin
+    if tg_table_name = 'sources' then
+        k := new.key;
+    else
+        k := old.source_key;
+    end if;
+    if exists (select 1 from sources s join levels l on l.key = s.level
+               where s.key = k and l.requires_scope)
+       and not exists (select 1 from source_scopes where source_key = k) then
+        raise exception 'source % needs a scope for its level', k using errcode = '23514';
+    end if;
+    return null;
+end $$;
+
+create constraint trigger sources_scope_required
+    after insert or update of level on sources
+    deferrable initially deferred
+    for each row execute function sources_scope_required();
+
+create constraint trigger source_scopes_scope_required
+    after delete on source_scopes
+    deferrable initially deferred
+    for each row execute function sources_scope_required();
 
 -- ---------------------------------------------------------------------------
 -- Flags: cases the system could not settle, or that it holds for a person
 -- ---------------------------------------------------------------------------
 create table flags (
     id uuid primary key default gen_random_uuid(),
-    source_id uuid not null references sources(id),
+    source_key text not null references sources(key),
     kind text not null
         check (kind in ('new_version', 'candidate', 'check_failed', 'confirmation_overdue')),
     detail jsonb not null default '{}',
@@ -62,7 +104,7 @@ create table flags (
 -- ---------------------------------------------------------------------------
 create table versions (
     id uuid primary key default gen_random_uuid(),
-    source_id uuid not null references sources(id) on delete restrict,
+    source_key text not null references sources(key) on delete restrict,
     status text not null default 'pending'
         check (status in ('pending', 'current', 'retired')),
     flag_id uuid references flags(id),
@@ -76,14 +118,14 @@ create table versions (
     created_at timestamptz not null default now(),
     became_current_at timestamptz,
     retired_at timestamptz,
-    unique (source_id, text_sha256),
+    unique (source_key, text_sha256),
     check (status <> 'current' or ingestion_status = 'completed'),
     check (status <> 'pending' or flag_id is not null),
     check ((status = 'retired') = (retired_at is not null))
 );
 
 create unique index versions_one_current_per_source
-    on versions (source_id) where status = 'current';
+    on versions (source_key) where status = 'current';
 
 -- Fingerprints never change once set: a version cannot be rewritten in place.
 create function versions_fingerprints_immutable() returns trigger
@@ -124,16 +166,16 @@ language plpgsql as $$
 begin
     if new.status = 'pending' and not exists (
         select 1 from flags f
-        where f.id = new.flag_id and f.resolved_at is null and f.source_id = new.source_id
+        where f.id = new.flag_id and f.resolved_at is null and f.source_key = new.source_key
     ) then
-        raise exception 'pending version % needs an open flag of source %', new.id, new.source_id
+        raise exception 'pending version % needs an open flag of source %', new.id, new.source_key
             using errcode = '23514';
     end if;
     return new;
 end $$;
 
 create trigger versions_pending_needs_open_flag
-    before insert or update of status, flag_id, source_id on versions
+    before insert or update of status, flag_id, source_key on versions
     for each row execute function versions_pending_needs_open_flag();
 
 -- ---------------------------------------------------------------------------
@@ -218,7 +260,7 @@ begin
     if not found then
         raise exception 'version % not found', p_version_id;
     end if;
-    perform 1 from sources where id = v.source_id for update;
+    perform 1 from sources where key = v.source_key for update;
     select * into v from versions where id = p_version_id for update;
     if v.status <> 'pending' then
         raise exception 'version % is %, not pending', p_version_id, v.status;
@@ -228,13 +270,13 @@ begin
     end if;
 
     delete from chunks
-        where version_id in (select id from versions where source_id = v.source_id and status = 'current');
+        where version_id in (select id from versions where source_key = v.source_key and status = 'current');
     update versions set status = 'retired', retired_at = now()
-        where source_id = v.source_id and status = 'current';
+        where source_key = v.source_key and status = 'current';
     update versions set status = 'current', became_current_at = now()
         where id = p_version_id;
     if v.address is not null then
-        update sources set address = v.address where id = v.source_id;
+        update sources set address = v.address where key = v.source_key;
     end if;
     update flags set resolved_at = now(), resolution = p_resolution where id = v.flag_id;
 end $$;
@@ -281,6 +323,18 @@ begin
     return v_id;
 end $$;
 
+-- Insert or update a source's level and replace its scopes, in one transaction.
+create function save_source(p_key text, p_level text, p_scopes text[]) returns void
+language plpgsql as $$
+begin
+    insert into sources (key, level) values (p_key, p_level)
+        on conflict (key) do update set level = excluded.level
+        where sources.level is distinct from excluded.level;
+    delete from source_scopes where source_key = p_key and scope_key <> all (p_scopes);
+    insert into source_scopes (source_key, scope_key)
+        select p_key, unnest(p_scopes) on conflict do nothing;
+end $$;
+
 -- ---------------------------------------------------------------------------
 -- Search: current versions only
 -- ---------------------------------------------------------------------------
@@ -291,7 +345,7 @@ create function match_chunks(
 returns table (
     id uuid,
     version_id uuid,
-    source_id uuid,
+    source_key text,
     content text,
     section_title text,
     page_number integer,
@@ -308,7 +362,7 @@ as $$
     select
         c.id,
         c.version_id,
-        s.id,
+        s.key,
         c.content,
         c.section_title,
         c.page_number,
@@ -316,13 +370,13 @@ as $$
         s.level,
         l.rank,
         coalesce((select array_agg(ss.scope_key order by ss.scope_key)
-                  from source_scopes ss where ss.source_id = s.id), '{}'),
+                  from source_scopes ss where ss.source_key = s.key), '{}'),
         c.token_count,
         1 - (c.embedding <=> query_embedding),
         v.title
     from chunks c
     join versions v on v.id = c.version_id and v.status = 'current'
-    join sources s on s.id = v.source_id
+    join sources s on s.key = v.source_key
     join levels l on l.key = s.level
     order by c.embedding <=> query_embedding
     limit match_count;
@@ -360,3 +414,4 @@ alter table eval_runs enable row level security;
 revoke execute on function promote_version(uuid, text) from public, anon, authenticated;
 revoke execute on function reject_version(uuid, text) from public, anon, authenticated;
 revoke execute on function log_answer(jsonb, uuid[]) from public, anon, authenticated;
+revoke execute on function save_source(text, text, text[]) from public, anon, authenticated;

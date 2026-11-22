@@ -87,26 +87,26 @@ def make_reference_rows(conn) -> None:
     )
 
 
-def make_source(conn, title: str = "Source", address: str | None = None,
+def make_source(conn, key: str = "source", address: str | None = None,
                 level: str = "operator") -> str:
+    """A source; an operator-level source gets scope bkw so it passes the scope rule."""
     make_reference_rows(conn)
-    return str(conn.execute(
-        "insert into sources (title, issuer, level, address) "
-        "values (%s, 'Issuer', %s, %s) returning id",
-        (title, level, address),
-    ).fetchone()[0])
+    conn.execute("insert into sources (key, level, address) values (%s, %s, %s)", (key, level, address))
+    if level == "operator":
+        conn.execute("insert into source_scopes (source_key, scope_key) values (%s, 'bkw')", (key,))
+    return key
 
 
-def make_flag(conn, source_id: str, kind: str = "new_version") -> str:
+def make_flag(conn, source_key: str, kind: str = "new_version") -> str:
     return str(conn.execute(
-        "insert into flags (source_id, kind) values (%s, %s) returning id",
-        (source_id, kind),
+        "insert into flags (source_key, kind) values (%s, %s) returning id",
+        (source_key, kind),
     ).fetchone()[0])
 
 
 def make_version(
     conn,
-    source_id: str,
+    source_key: str,
     status: str = "pending",
     flag_id: str | None = None,
     text_sha256: str | None = None,
@@ -116,11 +116,11 @@ def make_version(
     address: str | None = None,
 ) -> str:
     if status == "pending" and flag_id is None:
-        flag_id = make_flag(conn, source_id)
+        flag_id = make_flag(conn, source_key)
     return str(conn.execute(
-        "insert into versions (source_id, status, flag_id, title, address, file_sha256, "
+        "insert into versions (source_key, status, flag_id, title, address, file_sha256, "
         "text_sha256, ingestion_status, retired_at) "
         "values (%s, %s, %s, 'Doc', %s, %s, %s, %s, %s) returning id",
-        (source_id, status, flag_id, address, file_sha256 or uuid.uuid4().hex,
+        (source_key, status, flag_id, address, file_sha256 or uuid.uuid4().hex,
          text_sha256, ingestion_status, retired_at),
     ).fetchone()[0])

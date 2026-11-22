@@ -18,51 +18,27 @@ class DatabaseClient:
 
     # --- sources ------------------------------------------------------------
 
-    def find_source(self, title: str) -> dict[str, Any] | None:
-        rows = self.client.table("sources").select("*").eq("title", title).execute().data
-        if len(rows) > 1:
-            raise ValueError(f"{len(rows)} sources share the title {title!r}")
-        return rows[0] if rows else None
-
-    def insert_source(
-        self,
-        title: str,
-        issuer: str,
-        level: str,
-        scopes: list[str],
-        address: str | None,
-        listing_address: str | None,
-    ) -> dict[str, Any]:
-        source = self.client.table("sources").insert({
-            "title": title,
-            "issuer": issuer,
-            "level": level,
-            "address": address,
-            "listing_address": listing_address,
-        }).execute().data[0]
-        if scopes:
-            self.client.table("source_scopes").insert(
-                [{"source_id": source["id"], "scope_key": s} for s in scopes]
-            ).execute()
-        return source
-
-    def get_scopes(self, source_id: str) -> list[str]:
+    def find_source(self, key: str) -> dict[str, Any] | None:
+        """The stored source with its level and sorted scope keys, or None."""
         rows = (
-            self.client.table("source_scopes").select("scope_key")
-            .eq("source_id", str(source_id)).execute().data
+            self.client.table("sources").select("key, level, source_scopes(scope_key)")
+            .eq("key", key).execute().data
         )
-        return sorted(row["scope_key"] for row in rows)
+        if not rows:
+            return None
+        row = rows[0]
+        return {"key": row["key"], "level": row["level"],
+                "scopes": sorted(s["scope_key"] for s in row.get("source_scopes") or [])}
 
-    def update_source(self, source_id: str, fields: dict[str, Any]) -> None:
-        self.client.table("sources").update(fields).eq("id", str(source_id)).execute()
+    def save_source(self, key: str, level: str, scopes: list[str]) -> None:
+        """Insert or update a source and replace its scopes, in one transaction."""
+        self.client.rpc(
+            "save_source", {"p_key": key, "p_level": level, "p_scopes": list(scopes)}
+        ).execute()
 
-    def set_scopes(self, source_id: str, scopes: list[str]) -> None:
-        """Replace the source's scope rows with scopes."""
-        self.client.table("source_scopes").delete().eq("source_id", str(source_id)).execute()
-        if scopes:
-            self.client.table("source_scopes").insert(
-                [{"source_id": str(source_id), "scope_key": s} for s in scopes]
-            ).execute()
+    def list_source_keys(self) -> list[str]:
+        rows = self.client.table("sources").select("key").execute().data
+        return sorted(row["key"] for row in rows)
 
     def get_known_scopes(self) -> list[str]:
         """Keys of all defined scopes."""
@@ -71,11 +47,11 @@ class DatabaseClient:
 
     # --- versions -----------------------------------------------------------
 
-    def list_versions(self, source_id: str | None = None) -> list[dict[str, Any]]:
+    def list_versions(self, source_key: str | None = None) -> list[dict[str, Any]]:
         """All versions, or those of one source."""
         query = self.client.table("versions").select("*")
-        if source_id is not None:
-            query = query.eq("source_id", str(source_id))
+        if source_key is not None:
+            query = query.eq("source_key", source_key)
         return query.execute().data
 
     def get_version(self, doc_id: uuid.UUID) -> dict[str, Any] | None:
@@ -93,7 +69,7 @@ class DatabaseClient:
 
     def hold_version(
         self,
-        source_id: str,
+        source_key: str,
         title: str,
         address: str | None,
         file_path: str | None,
@@ -102,10 +78,10 @@ class DatabaseClient:
     ) -> dict[str, Any]:
         """Insert the flag that holds a new version, then the pending version itself."""
         flag = self.client.table("flags").insert(
-            {"source_id": str(source_id), "kind": kind}
+            {"source_key": source_key, "kind": kind}
         ).execute().data[0]
         return self.client.table("versions").insert({
-            "source_id": str(source_id),
+            "source_key": source_key,
             "status": "pending",
             "flag_id": flag["id"],
             "title": title,

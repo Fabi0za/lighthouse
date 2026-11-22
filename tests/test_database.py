@@ -50,18 +50,18 @@ def test_hold_version_inserts_flag_before_pending_document(db, mock_supabase):
         MagicMock(data=[{"id": flag_id}]),
         MagicMock(data=[{"id": doc_id, "status": "pending"}]),
     ]
-    source_id = str(uuid.uuid4())
+    source_key = "bkw-vorgaben"
 
-    doc = db.hold_version(source_id, "Doc V2", "https://example.org/v2.pdf", "data/v2.pdf", "abc")
+    doc = db.hold_version(source_key, "Doc V2", "https://example.org/v2.pdf", "data/v2.pdf", "abc")
 
     tables = [c.args[0] for c in mock_supabase.table.call_args_list]
     assert tables == ["flags", "versions"]
     flag_row = mock_supabase.insert.call_args_list[0].args[0]
-    assert flag_row == {"source_id": source_id, "kind": "new_version"}
+    assert flag_row == {"source_key": source_key, "kind": "new_version"}
     doc_row = mock_supabase.insert.call_args_list[1].args[0]
     assert doc_row["flag_id"] == flag_id
     assert doc_row["status"] == "pending"
-    assert doc_row["source_id"] == source_id
+    assert doc_row["source_key"] == source_key
     assert doc_row["file_sha256"] == "abc"
     assert doc["id"] == doc_id
 
@@ -98,33 +98,8 @@ def test_log_answer_calls_rpc_and_returns_id(db, mock_supabase):
     assert result == answer_id
 
 
-def test_find_source_returns_none_when_missing(db, mock_supabase):
-    mock_supabase.execute.return_value = MagicMock(data=[])
-    assert db.find_source("Nothing") is None
 
 
-def test_find_source_raises_on_two_matches(db, mock_supabase):
-    mock_supabase.execute.return_value = MagicMock(data=[{"id": "a"}, {"id": "b"}])
-    with pytest.raises(ValueError):
-        db.find_source("Twice")
-
-
-def test_insert_source_writes_scopes(db, mock_supabase):
-    source_id = str(uuid.uuid4())
-    mock_supabase.execute.side_effect = [MagicMock(data=[{"id": source_id}]), MagicMock(data=[])]
-    db.insert_source("T", "I", "operator", ["bkw", "ekz"], None, None)
-    tables = [c.args[0] for c in mock_supabase.table.call_args_list]
-    assert tables == ["sources", "source_scopes"]
-    assert mock_supabase.insert.call_args_list[1].args[0] == [
-        {"source_id": source_id, "scope_key": "bkw"},
-        {"source_id": source_id, "scope_key": "ekz"},
-    ]
-
-
-def test_insert_source_without_scopes_writes_no_scope_rows(db, mock_supabase):
-    mock_supabase.execute.side_effect = [MagicMock(data=[{"id": "s"}])]
-    db.insert_source("T", "I", "national", [], None, None)
-    assert [c.args[0] for c in mock_supabase.table.call_args_list] == ["sources"]
 
 
 def test_delete_pending_version_refuses_non_pending(db, mock_supabase):
@@ -154,27 +129,33 @@ def test_get_known_scopes(db, mock_supabase):
     mock_supabase.table.assert_called_with("scopes")
 
 
-def test_get_scopes(db, mock_supabase):
-    mock_supabase.execute.return_value = MagicMock(data=[{"scope_key": "ekz"}, {"scope_key": "bkw"}])
-    assert db.get_scopes("s") == ["bkw", "ekz"]
-    mock_supabase.table.assert_called_with("source_scopes")
+def test_find_source_returns_none_when_missing(db, mock_supabase):
+    mock_supabase.execute.return_value = MagicMock(data=[])
+    assert db.find_source("nothing") is None
+    mock_supabase.eq.assert_called_with("key", "nothing")
 
 
-def test_update_source(db, mock_supabase):
-    db.update_source("s", {"issuer": "New"})
+def test_find_source_returns_level_and_sorted_scopes(db, mock_supabase):
+    mock_supabase.execute.return_value = MagicMock(data=[
+        {"key": "s", "level": "operator", "source_scopes": [{"scope_key": "ekz"}, {"scope_key": "bkw"}]}])
+    assert db.find_source("s") == {"key": "s", "level": "operator", "scopes": ["bkw", "ekz"]}
+
+
+def test_save_source_calls_rpc(db, mock_supabase):
+    db.save_source("s", "operator", ["bkw"])
+    mock_supabase.rpc.assert_called_once_with(
+        "save_source", {"p_key": "s", "p_level": "operator", "p_scopes": ["bkw"]})
+
+
+def test_list_source_keys(db, mock_supabase):
+    mock_supabase.execute.return_value = MagicMock(data=[{"key": "b"}, {"key": "a"}])
+    assert db.list_source_keys() == ["a", "b"]
     mock_supabase.table.assert_called_with("sources")
-    mock_supabase.update.assert_called_once_with({"issuer": "New"})
-    mock_supabase.eq.assert_called_with("id", "s")
 
 
-def test_set_scopes_replaces_rows(db, mock_supabase):
-    db.set_scopes("s", ["bkw", "ekz"])
-    assert [c.args[0] for c in mock_supabase.table.call_args_list] == ["source_scopes", "source_scopes"]
-    mock_supabase.delete.assert_called_once()
-    assert mock_supabase.insert.call_args.args[0] == [
-        {"source_id": "s", "scope_key": "bkw"}, {"source_id": "s", "scope_key": "ekz"}]
+def test_hold_version_writes_source_key(db, mock_supabase):
+    mock_supabase.execute.side_effect = [MagicMock(data=[{"id": "f"}]), MagicMock(data=[{"id": "v"}])]
+    db.hold_version("s", "T", None, None, "h")
+    assert mock_supabase.insert.call_args_list[0].args[0]["source_key"] == "s"
+    assert mock_supabase.insert.call_args_list[1].args[0]["source_key"] == "s"
 
-
-def test_set_scopes_to_none_only_deletes(db, mock_supabase):
-    db.set_scopes("s", [])
-    mock_supabase.insert.assert_not_called()

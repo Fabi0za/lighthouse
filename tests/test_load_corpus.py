@@ -33,16 +33,13 @@ def _corpus(tmp_path: Path, body: str) -> Path:
 
 GOOD = """
 sources:
-  - title: National rules
-    issuer: VSE
+  - key: national-rules
     level: national
     versions:
       - {path: a.pdf, title: "National rules 2025", address: "https://example.org/a.pdf"}
-  - title: Operator rules
-    issuer: Op
+  - key: op-rules
     level: operator
-    scopes: [X, Y]
-    listing_address: "https://example.org/list"
+    scopes: [x, y]
     versions:
       - {path: v1.pdf, title: "Operator rules (V1)"}
       - {path: v2.pdf, title: "Operator rules (V2)", max_pages: 4}
@@ -58,11 +55,11 @@ def _files(tmp_path):
 def test_load_corpus_reads_sources_and_versions(tmp_path):
     _files(tmp_path)
     national, operator = lc.load_corpus(_corpus(tmp_path, GOOD), tmp_path)
-    assert (national.level, national.scopes) == ("national", [])
-    assert not hasattr(national, "authority_rank")
+    assert (national.key, national.level, national.scopes) == ("national-rules", "national", [])
+    for gone in ("authority_rank", "title", "issuer", "listing_address"):
+        assert not hasattr(national, gone), gone
     assert national.versions[0].address == "https://example.org/a.pdf"
-    assert operator.scopes == ["X", "Y"]
-    assert operator.listing_address == "https://example.org/list"
+    assert (operator.key, operator.scopes) == ("op-rules", ["x", "y"])
     assert [v.path for v in operator.versions] == ["v1.pdf", "v2.pdf"]
     assert operator.versions[1].max_pages == 4
     assert operator.versions[0].address is None
@@ -72,12 +69,13 @@ def test_load_corpus_reports_all_problems(tmp_path):
     _pdf(tmp_path / "a.pdf")
     corpus = _corpus(tmp_path, """
 sources:
-  - {title: A, issuer: VSE, level: regional, versions: [{path: a.pdf, title: A}]}
-  - {title: B, issuer: X, level: operator, versions: [{path: a.pdf, title: B}]}
-  - {title: C, issuer: X, level: national, versions: [{path: missing.pdf, title: C}]}
-  - {issuer: X, level: national, versions: [{path: a.pdf, title: D}]}
-  - {title: E, issuer: X, level: national, versions: []}
-  - {title: F, issuer: X, level: national, versions: [{path: a.pdf, title: F, max_pages: 0}]}
+  - {key: a, level: regional, versions: [{path: a.pdf, title: A}]}
+  - {key: b, level: operator, versions: [{path: a.pdf, title: B}]}
+  - {key: c, level: national, versions: [{path: missing.pdf, title: C}]}
+  - {level: national, versions: [{path: a.pdf, title: D}]}
+  - {key: e, level: national, versions: []}
+  - {key: f, level: national, versions: [{path: a.pdf, title: F, max_pages: 0}]}
+  - {key: Bad Key, level: national, versions: [{path: a.pdf, title: G}]}
 """)
     with pytest.raises(ValueError) as e:
         lc.load_corpus(corpus, tmp_path)
@@ -85,20 +83,21 @@ sources:
     assert "level must be one of" in msg
     assert "operator sources need scopes" in msg
     assert "missing.pdf: file not found" in msg
-    assert "missing title" in msg
-    assert "E: no versions" in msg
+    assert "missing key" in msg
+    assert "e: no versions" in msg
+    assert "Bad Key: key must be lowercase letters and digits joined by hyphens" in msg
     assert "max_pages must be a positive integer" in msg
 
 
-def test_load_corpus_rejects_duplicate_source_titles(tmp_path):
+def test_load_corpus_rejects_duplicate_source_keys(tmp_path):
     _pdf(tmp_path / "a.pdf")
     _pdf(tmp_path / "b.pdf", 2)
     corpus = _corpus(tmp_path, """
 sources:
-  - {title: Same, issuer: X, level: national, versions: [{path: a.pdf, title: A}]}
-  - {title: Same, issuer: X, level: national, versions: [{path: b.pdf, title: B}]}
+  - {key: same, level: national, versions: [{path: a.pdf, title: A}]}
+  - {key: same, level: national, versions: [{path: b.pdf, title: B}]}
 """)
-    with pytest.raises(ValueError, match="source title listed twice"):
+    with pytest.raises(ValueError, match="source key listed twice"):
         lc.load_corpus(corpus, tmp_path)
 
 
@@ -106,7 +105,7 @@ def test_load_corpus_rejects_path_listed_twice(tmp_path):
     _pdf(tmp_path / "a.pdf")
     corpus = _corpus(tmp_path, """
 sources:
-  - {title: A, issuer: X, level: national, versions: [{path: a.pdf, title: A}, {path: a.pdf, title: A2}]}
+  - {key: a, level: national, versions: [{path: a.pdf, title: A}, {path: a.pdf, title: A2}]}
 """)
     with pytest.raises(ValueError, match="listed twice"):
         lc.load_corpus(corpus, tmp_path)
@@ -134,42 +133,42 @@ def test_repo_corpus_is_valid():
     """The checked-in corpus.yaml parses and lists BKW Vorgaben V1.2 before V1.3."""
     root = Path(__file__).resolve().parent.parent
     data = __import__("yaml").safe_load((root / "corpus.yaml").read_text(encoding="utf-8"))
-    vorgaben = [s for s in data["sources"] if "Vorgaben an Niederspannungs" in s["title"]]
+    vorgaben = [s for s in data["sources"] if s["key"] == "bkw-vorgaben-niederspannung"]
     assert len(vorgaben) == 1
     paths = [v["path"] for v in vorgaben[0]["versions"]]
     assert paths == ["data/BKW/DE_Vorgaben_BKW_V1.2.pdf", "data/BKW/20250521_DE_Vorgaben_BKW_V1.3.pdf"]
     assert all(s.get("scopes") for s in data["sources"] if s["level"] == "operator")
 
 
-async def test_load_all_creates_source_once_and_loads_versions_in_order(tmp_path):
+async def test_load_all_saves_each_source_and_loads_versions_in_order(tmp_path, capsys):
     _files(tmp_path)
     sources = lc.load_corpus(_corpus(tmp_path, GOOD), tmp_path)
     db = MagicMock()
-    db.find_source.side_effect = [None, {"id": "existing", "issuer": "Op", "level": "operator",
-                                         "listing_address": "https://example.org/list"}]
-    db.get_scopes.return_value = ["X", "Y"]
-    db.insert_source.return_value = {"id": "new-src"}
+    db.find_source.side_effect = [None, {"key": "op-rules", "level": "operator", "scopes": ["x", "y"]}]
     calls = []
 
-    async def fake_load(db_, source, file, title, address, *rest, max_pages=None, stored_path=None,
+    async def fake_load(db_, source_key, file, title, address, *rest, max_pages=None, stored_path=None,
                         parsed_cache=None):
-        calls.append((source["id"], stored_path, max_pages))
+        calls.append((source_key, stored_path, max_pages))
         return "promoted", "d"
 
     counts = await lc.load_all(sources, tmp_path, db, None, None, None, load=fake_load)
 
-    db.insert_source.assert_called_once_with("National rules", "VSE", "national", [], None, None)
-    assert calls == [("new-src", "a.pdf", None), ("existing", "v1.pdf", None), ("existing", "v2.pdf", 4)]
+    assert [c.args for c in db.save_source.call_args_list] == [
+        ("national-rules", "national", []), ("op-rules", "operator", ["x", "y"])]
+    assert calls == [("national-rules", "a.pdf", None), ("op-rules", "v1.pdf", None),
+                     ("op-rules", "v2.pdf", 4)]
     assert counts == {"promoted": 3}
-    db.update_source.assert_not_called()  # stored source already matches corpus.yaml
-    db.set_scopes.assert_not_called()
+    out = capsys.readouterr().out
+    assert "added source 'national-rules'" in out
+    assert "updated source" not in out  # the stored source already matched
 
 
 async def test_load_all_stops_a_source_after_a_failure(tmp_path):
     _files(tmp_path)
     sources = lc.load_corpus(_corpus(tmp_path, GOOD), tmp_path)
     db = MagicMock()
-    db.find_source.return_value = {"id": "s"}
+    db.find_source.return_value = None
     loaded = []
 
     async def fake_load(db_, source, file, title, address, *rest, max_pages=None, stored_path=None,
@@ -189,12 +188,12 @@ async def test_load_all_uses_real_load_version_by_default(tmp_path, monkeypatch)
     _pdf(tmp_path / "a.pdf")
     sources = lc.load_corpus(_corpus(tmp_path, """
 sources:
-  - {title: A, issuer: X, level: national, versions: [{path: a.pdf, title: A}]}
+  - {key: a, level: national, versions: [{path: a.pdf, title: A}]}
 """), tmp_path)
     fake = AsyncMock(return_value=("skipped", "d"))
     monkeypatch.setattr(lc, "load_version", fake)
     db = MagicMock()
-    db.find_source.return_value = {"id": "s"}
+    db.find_source.return_value = None
     assert await lc.load_all(sources, tmp_path, db, None, None, None) == {"skipped": 1}
     fake.assert_awaited_once()
 
@@ -203,7 +202,7 @@ async def test_load_all_passes_cache_through(tmp_path):
     _pdf(tmp_path / "a.pdf")
     sources = lc.load_corpus(_corpus(tmp_path, """
 sources:
-  - {title: A, issuer: X, level: national, versions: [{path: a.pdf, title: A}]}
+  - {key: a, level: national, versions: [{path: a.pdf, title: A}]}
 """), tmp_path)
     seen = {}
 
@@ -212,46 +211,25 @@ sources:
         return "promoted", "d"
 
     db = MagicMock()
-    db.find_source.return_value = {"id": "s"}
+    db.find_source.return_value = None
     await lc.load_all(sources, tmp_path, db, None, None, None, load=fake_load, parsed_cache=tmp_path)
     assert seen["cache"] == tmp_path
-
-
-def _stored(**over):
-    row = {"id": "s", "issuer": "Op", "level": "operator",
-           "listing_address": "https://example.org/list"}
-    return {**row, **over}
 
 
 async def _noop_load(*a, **k):
     return "skipped", "d"
 
 
-async def test_load_all_syncs_changed_source_fields_and_scopes(tmp_path, capsys):
+async def test_load_all_reports_changed_level_and_scopes(tmp_path, capsys):
     _files(tmp_path)
     sources = lc.load_corpus(_corpus(tmp_path, GOOD), tmp_path)[1:]  # the operator source
     db = MagicMock()
-    db.find_source.return_value = _stored(issuer="Old issuer", level="national")
-    db.get_scopes.return_value = ["X"]
+    db.find_source.return_value = {"key": "op-rules", "level": "national", "scopes": ["x"]}
 
     await lc.load_all(sources, tmp_path, db, None, None, None, load=_noop_load)
 
-    db.update_source.assert_called_once_with(
-        "s", {"issuer": "Op", "level": "operator"})
-    db.set_scopes.assert_called_once_with("s", ["X", "Y"])
+    db.save_source.assert_called_once_with("op-rules", "operator", ["x", "y"])
     out = capsys.readouterr().out
-    assert "updated source 'Operator rules'" in out
-    assert "scopes ['X'] -> ['X', 'Y']" in out
-
-
-async def test_load_all_leaves_matching_source_alone(tmp_path):
-    _files(tmp_path)
-    sources = lc.load_corpus(_corpus(tmp_path, GOOD), tmp_path)[1:]
-    db = MagicMock()
-    db.find_source.return_value = _stored()
-    db.get_scopes.return_value = ["Y", "X"]  # order does not matter
-
-    await lc.load_all(sources, tmp_path, db, None, None, None, load=_noop_load)
-
-    db.update_source.assert_not_called()
-    db.set_scopes.assert_not_called()
+    assert "updated source 'op-rules'" in out
+    assert "level 'national' -> 'operator'" in out
+    assert "scopes ['x'] -> ['x', 'y']" in out

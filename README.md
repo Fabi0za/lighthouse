@@ -100,7 +100,8 @@ Versions are never deleted; a newer version retires the old one. The API has no 
 # Load every source and version in corpus.yaml, oldest version first.
 # Versions are matched by content fingerprint: bytes already stored are skipped,
 # new bytes with the same text are dismissed, new content becomes current and
-# retires the previous version. Existing sources are updated to match corpus.yaml.
+# retires the previous version. Sources are identified by key; each run saves their
+# level and scopes as listed in corpus.yaml.
 # --parsed-cache DIR reads DIR/<pdf sha256>.json instead of calling the parser.
 python scripts/load_corpus.py [--dry-run] [--parsed-cache DIR]
 

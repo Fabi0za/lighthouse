@@ -10,9 +10,8 @@ retiring the previous version. Each source's versions are loaded oldest first,
 as listed; after a failure, later versions of that source are not attempted,
 so an older version can never be promoted over a newer one.
 
-Sources are matched by title: renaming a source title creates a new source. For a
-source that already exists, issuer, level, listing address and scopes are updated
-to match corpus.yaml, and the output says what changed.
+Sources are identified by their key. Each run saves every source's level and scopes
+as listed in corpus.yaml and says what changed.
 
 With --parsed-cache DIR, a file DIR/<pdf sha256>.json is used as the parser output
 instead of calling the parser; the output says which versions came from the cache.
@@ -21,6 +20,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import re
 import sys
 from collections import Counter
 from dataclasses import dataclass, field
@@ -37,7 +37,8 @@ from app.ingestion.versions import cached_output, first_pages, load_version  # n
 from app.models.database import DatabaseClient
 
 LEVELS = ("national", "operator")  # until corpus.yaml defines levels
-SOURCE_FIELDS = ("title", "issuer", "level")
+SOURCE_FIELDS = ("key", "level")
+KEY_FORMAT = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")  # as checked by the sources table
 VERSION_FIELDS = ("path", "title")
 
 
@@ -51,11 +52,9 @@ class CorpusVersion:
 
 @dataclass
 class CorpusSource:
-    title: str
-    issuer: str
+    key: str
     level: str
     scopes: list[str]
-    listing_address: str | None
     versions: list[CorpusVersion] = field(default_factory=list)
 
 
@@ -64,14 +63,17 @@ def load_corpus(corpus_path: Path, repo_root: Path) -> list[CorpusSource]:
     data = yaml.safe_load(corpus_path.read_text(encoding="utf-8")) or {}
     problems: list[str] = []
     sources: list[CorpusSource] = []
-    seen_titles: set[str] = set()
+    seen_keys: set[str] = set()
     seen_paths: set[str] = set()
 
     for i, raw in enumerate(data.get("sources") or [], 1):
-        label = raw.get("title") or f"source {i}"
+        label = raw.get("key") or f"source {i}"
         missing = [f for f in SOURCE_FIELDS if not raw.get(f)]
         if missing:
             problems.append(f"{label}: missing {', '.join(missing)}")
+            continue
+        if not KEY_FORMAT.match(str(raw["key"])):
+            problems.append(f"{label}: key must be lowercase letters and digits joined by hyphens")
             continue
         if raw["level"] not in LEVELS:
             problems.append(f"{label}: level must be one of {sorted(LEVELS)}")
@@ -80,8 +82,8 @@ def load_corpus(corpus_path: Path, repo_root: Path) -> list[CorpusSource]:
         if raw["level"] == "operator" and not scopes:
             problems.append(f"{label}: operator sources need scopes")
             continue
-        if raw["title"] in seen_titles:
-            problems.append(f"{label}: source title listed twice")
+        if raw["key"] in seen_keys:
+            problems.append(f"{label}: source key listed twice")
             continue
         raw_versions = raw.get("versions") or []
         if not raw_versions:
@@ -111,11 +113,8 @@ def load_corpus(corpus_path: Path, repo_root: Path) -> list[CorpusSource]:
                 address=rv.get("address") or None, max_pages=max_pages,
             ))
 
-        seen_titles.add(raw["title"])
-        sources.append(CorpusSource(
-            title=raw["title"], issuer=raw["issuer"], level=raw["level"], scopes=scopes,
-            listing_address=raw.get("listing_address") or None, versions=versions,
-        ))
+        seen_keys.add(raw["key"])
+        sources.append(CorpusSource(key=raw["key"], level=raw["level"], scopes=scopes, versions=versions))
 
     if problems:
         raise ValueError("corpus.yaml has problems:\n  " + "\n  ".join(problems))
@@ -140,19 +139,18 @@ def plan(
     return [(s, v, action(v)) for s in sources for v in s.versions]
 
 
-def sync_source(db, stored: dict, s: CorpusSource) -> None:
-    """Bring a stored source's fields and scopes in line with corpus.yaml, and say what changed."""
-    wanted = {"issuer": s.issuer, "level": s.level, "listing_address": s.listing_address}
-    changed = {k: v for k, v in wanted.items() if stored.get(k) != v}
-    notes = [f"{k} {stored.get(k)!r} -> {v!r}" for k, v in changed.items()]
-    if changed:
-        db.update_source(stored["id"], changed)
-    old_scopes, new_scopes = sorted(db.get_scopes(stored["id"])), sorted(s.scopes)
-    if old_scopes != new_scopes:
-        db.set_scopes(stored["id"], new_scopes)
-        notes.append(f"scopes {old_scopes} -> {new_scopes}")
+def report_source(stored: dict | None, s: CorpusSource) -> None:
+    """Say whether saving s adds the source or changes its level or scopes."""
+    if stored is None:
+        print(f"added source {s.key!r}")
+        return
+    notes = []
+    if stored["level"] != s.level:
+        notes.append(f"level {stored['level']!r} -> {s.level!r}")
+    if sorted(stored["scopes"]) != sorted(s.scopes):
+        notes.append(f"scopes {sorted(stored['scopes'])} -> {sorted(s.scopes)}")
     if notes:
-        print(f"updated source {s.title!r}: " + "; ".join(notes))
+        print(f"updated source {s.key!r}: " + "; ".join(notes))
 
 
 async def load_all(sources, repo_root, db, parser, chunker, embedder, load=None,
@@ -161,20 +159,15 @@ async def load_all(sources, repo_root, db, parser, chunker, embedder, load=None,
     load = load or load_version
     counts: Counter[str] = Counter()
     for s in sources:
-        source = db.find_source(s.title)
-        if source:
-            sync_source(db, source, s)
-        else:
-            source = db.insert_source(
-                s.title, s.issuer, s.level, s.scopes, None, s.listing_address
-            )
+        report_source(db.find_source(s.key), s)
+        db.save_source(s.key, s.level, s.scopes)
         for k, v in enumerate(s.versions):
             cached = cached_output(parsed_cache, file_sha256(repo_root / v.path))
             print(f"{v.path} ..." + (f" (parser output from cache: {cached.name})" if cached else ""),
                   flush=True)
             try:
                 action, doc_id = await load(
-                    db, source, repo_root / v.path, v.title, v.address,
+                    db, s.key, repo_root / v.path, v.title, v.address,
                     parser, chunker, embedder, max_pages=v.max_pages, stored_path=v.path,
                     parsed_cache=parsed_cache,
                 )
@@ -183,7 +176,7 @@ async def load_all(sources, repo_root, db, parser, chunker, embedder, load=None,
                 counts["failed"] += 1
                 rest = len(s.versions) - k - 1
                 if rest:
-                    print(f"  {rest} later version(s) of {s.title!r} not attempted")
+                    print(f"  {rest} later version(s) of {s.key!r} not attempted")
                     counts["not attempted"] += rest
                 break
             print(f"  {action} ({doc_id})")

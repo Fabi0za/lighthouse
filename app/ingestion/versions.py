@@ -36,7 +36,7 @@ def cached_output(parsed_cache: Path | None, file_hash: str) -> Path | None:
 
 async def load_version(
     db,
-    source: dict[str, Any],
+    source_key: str,
     file: Path,
     title: str,
     address: str | None,
@@ -47,7 +47,7 @@ async def load_version(
     stored_path: str | None = None,
     parsed_cache: Path | None = None,
 ) -> tuple[str, str]:
-    """Load file as a version of source. Returns (action, version_id).
+    """Load file as a version of the source with source_key. Returns (action, version_id).
 
     action is "skipped" (these bytes are already a version), "dismissed" (new bytes,
     same text: repackaging) or "promoted" (new content, now current).
@@ -58,9 +58,8 @@ async def load_version(
     is whatever was parsed before). Without it, the file is always parsed.
     """
     file = Path(file)
-    source_id = source["id"]
     file_hash = file_sha256(file)
-    versions = db.list_versions(source_id)
+    versions = db.list_versions(source_key)
 
     for v in versions:
         if v.get("file_sha256") == file_hash:
@@ -69,7 +68,7 @@ async def load_version(
             db.delete_pending_version(v["id"], "dismissed (reload)")
     versions = [v for v in versions if v.get("file_sha256") != file_hash]
 
-    doc = db.hold_version(source_id, title, address, stored_path or str(file), file_hash)
+    doc = db.hold_version(source_key, title, address, stored_path or str(file), file_hash)
     doc_id = doc["id"]
     try:
         db.update_version(doc_id, {"ingestion_status": "processing"})

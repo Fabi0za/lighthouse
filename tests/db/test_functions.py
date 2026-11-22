@@ -61,7 +61,7 @@ def test_promote_first_version(pg):
     assert row["became_current_at"] is not None
     assert flag_of(pg, d)["resolved_at"] is not None
     assert flag_of(pg, d)["resolution"] == "promoted (auto)"
-    addr = pg.execute("select address from sources where id = %s", (s,)).fetchone()[0]
+    addr = pg.execute("select address from sources where key = %s", (s,)).fetchone()[0]
     assert addr == "https://example.org/v1.pdf"
 
 
@@ -90,7 +90,7 @@ def test_promote_keeps_address_when_null(pg):
     promote(pg, v1)
     v2 = make_version(pg, s, address=None, text_sha256="t2")
     promote(pg, v2)
-    addr = pg.execute("select address from sources where id = %s", (s,)).fetchone()[0]
+    addr = pg.execute("select address from sources where key = %s", (s,)).fetchone()[0]
     assert addr == "https://example.org/a.pdf"
 
 
@@ -166,9 +166,9 @@ def test_search_excludes_pending(pg):
 
 
 def test_search_returns_source_fields_and_scopes(pg):
-    a = make_source(pg, title="A")
-    pg.execute("insert into source_scopes values (%s, 'bkw'), (%s, 'ekz')", (a, a))
-    b = make_source(pg, title="B", level="national")
+    a = make_source(pg, key="a")
+    pg.execute("insert into source_scopes (source_key, scope_key) values (%s, 'ekz')", (a,))
+    b = make_source(pg, key="b", level="national")
     for s in (a, b):
         d = make_version(pg, s, text_sha256="t-" + s)
         add_chunk(pg, d)
@@ -176,11 +176,11 @@ def test_search_returns_source_fields_and_scopes(pg):
     cur = pg.execute(f"select * from match_chunks('{VEC}'::vector, 40)")
     cols = [c.name for c in cur.description]
     rows = [dict(zip(cols, r)) for r in cur.fetchall()]
-    for col in ("id", "version_id", "source_id", "content", "section_title", "page_number",
+    for col in ("id", "version_id", "source_key", "content", "section_title", "page_number",
                 "chunk_index", "level", "rank", "scopes", "token_count",
                 "version_title"):
         assert col in cols, col
-    by_source = {str(r["source_id"]): r for r in rows}
+    by_source = {str(r["source_key"]): r for r in rows}
     assert sorted(by_source[a]["scopes"]) == ["bkw", "ekz"]
     assert by_source[b]["scopes"] == []
     assert (by_source[a]["level"], by_source[a]["rank"]) == ("operator", 2)
@@ -190,7 +190,7 @@ def test_search_returns_source_fields_and_scopes(pg):
 # --- log_answer --------------------------------------------------------------
 
 def test_log_answer_dedupes_versions(pg):
-    s1, s2 = make_source(pg, title="A"), make_source(pg, title="B")
+    s1, s2 = make_source(pg, key="a"), make_source(pg, key="b")
     d1 = make_version(pg, s1, status="current")
     d2 = make_version(pg, s2, status="current")
     log = {"question": "q", "detected_scope": None, "retrieved_chunks": [], "reranked_chunks": [],

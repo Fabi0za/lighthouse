@@ -109,12 +109,12 @@ async def main():
         chunks = Chunker(chunk_size=s.chunk_size, chunk_overlap=s.chunk_overlap).chunk_sections(
             sections, doc_title=v12["title"])
         embeddings = await embedder.embed_texts([c.content for c in chunks])
-        source = db.client.table("sources").select("*").eq("id", v12["source_id"]).execute().data[0]
+        source = db.client.table("sources").select("*").eq("key", v12["source_key"]).execute().data[0]
         source_rank = db.client.table("levels").select("rank").eq("key", source["level"]) \
             .execute().data[0]["rank"]
         scopes = [r["scope_key"] for r in db.client.table("source_scopes").select("scope_key")
-                  .eq("source_id", v12["source_id"]).execute().data]
-        source_fields = {"source_id": source["id"], "level": source["level"],
+                  .eq("source_key", v12["source_key"]).execute().data]
+        source_fields = {"source_key": source["key"], "level": source["level"],
                          "rank": source_rank, "scopes": sorted(scopes)}
         scratch_built = (chunks, embeddings, source_fields)
         results["scratch_chunk_count"] = len(chunks)

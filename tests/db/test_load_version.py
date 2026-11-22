@@ -37,18 +37,18 @@ class PgDb:
         self.c.commit()
         return row
 
-    def list_versions(self, source_id):
-        return self.c.execute("select * from versions where source_id = %s", (source_id,)).fetchall()
+    def list_versions(self, source_key):
+        return self.c.execute("select * from versions where source_key = %s", (source_key,)).fetchall()
 
     def get_version(self, doc_id):
         return self.c.execute("select * from versions where id = %s", (doc_id,)).fetchone()
 
-    def hold_version(self, source_id, title, address, file_path, file_sha256, kind="new_version"):
-        flag = self._one("insert into flags (source_id, kind) values (%s, %s) returning id", (source_id, kind))
+    def hold_version(self, source_key, title, address, file_path, file_sha256, kind="new_version"):
+        flag = self._one("insert into flags (source_key, kind) values (%s, %s) returning id", (source_key, kind))
         return self._one(
-            "insert into versions (source_id, status, flag_id, title, address, file_path, file_sha256) "
+            "insert into versions (source_key, status, flag_id, title, address, file_path, file_sha256) "
             "values (%s, 'pending', %s, %s, %s, %s, %s) returning *",
-            (source_id, flag["id"], title, address, file_path, file_sha256))
+            (source_key, flag["id"], title, address, file_path, file_sha256))
 
     def update_version(self, doc_id, updates):
         (k, v), = updates.items()
@@ -102,11 +102,11 @@ def _deps(fail_embedding: bool):
     return parser, chunker, embedder
 
 
-def _state(conn, source_id):
-    docs = conn.execute("select status, ingestion_status from versions where source_id = %s",
-                        (source_id,)).fetchall()
-    open_flags = conn.execute("select count(*) as n from flags where source_id = %s and resolved_at is null",
-                              (source_id,)).fetchone()["n"]
+def _state(conn, source_key):
+    docs = conn.execute("select status, ingestion_status from versions where source_key = %s",
+                        (source_key,)).fetchall()
+    open_flags = conn.execute("select count(*) as n from flags where source_key = %s and resolved_at is null",
+                              (source_key,)).fetchone()["n"]
     return sorted((d["status"], d["ingestion_status"]) for d in docs), open_flags
 
 
@@ -120,17 +120,19 @@ def db(pg_db_url):
 def source(db):
     make_reference_rows(db.c)
     db.c.commit()
-    return str(db._one("insert into sources (title, issuer, level) "
-                       "values ('S', 'I', 'operator') returning id")["id"])
+    db.c.execute("insert into sources (key, level) values ('s', 'operator')")
+    db.c.execute("insert into source_scopes (source_key, scope_key) values ('s', 'bkw')")
+    db.c.commit()
+    return "s"
 
 
 async def test_failed_load_after_text_fingerprint_reloads_cleanly(db, source, tmp_path):
     f = _pdf(tmp_path / "v1.pdf", 200)
     with pytest.raises(RuntimeError):
-        await load_version(db, {"id": source}, f, "Doc", None, *_deps(fail_embedding=True))
+        await load_version(db, source, f, "Doc", None, *_deps(fail_embedding=True))
     assert _state(db.c, source) == ([("pending", "failed")], 1)
 
-    action, _ = await load_version(db, {"id": source}, f, "Doc", None, *_deps(fail_embedding=False))
+    action, _ = await load_version(db, source, f, "Doc", None, *_deps(fail_embedding=False))
 
     assert action == "promoted"
     assert _state(db.c, source) == ([("current", "completed")], 0)
@@ -138,10 +140,10 @@ async def test_failed_load_after_text_fingerprint_reloads_cleanly(db, source, tm
 
 async def test_stale_pending_row_with_same_text_but_new_bytes_does_not_block(db, source, tmp_path):
     with pytest.raises(RuntimeError):
-        await load_version(db, {"id": source}, _pdf(tmp_path / "a.pdf", 200), "Doc", None,
+        await load_version(db, source, _pdf(tmp_path / "a.pdf", 200), "Doc", None,
                            *_deps(fail_embedding=True))
 
-    action, _ = await load_version(db, {"id": source}, _pdf(tmp_path / "b.pdf", 300), "Doc", None,
+    action, _ = await load_version(db, source, _pdf(tmp_path / "b.pdf", 300), "Doc", None,
                                    *_deps(fail_embedding=False))
 
     assert action == "promoted"
@@ -149,10 +151,10 @@ async def test_stale_pending_row_with_same_text_but_new_bytes_does_not_block(db,
 
 
 async def test_repackaged_current_version_is_dismissed_without_open_flag(db, source, tmp_path):
-    await load_version(db, {"id": source}, _pdf(tmp_path / "a.pdf", 200), "Doc", None,
+    await load_version(db, source, _pdf(tmp_path / "a.pdf", 200), "Doc", None,
                        *_deps(fail_embedding=False))
 
-    action, _ = await load_version(db, {"id": source}, _pdf(tmp_path / "b.pdf", 300), "Doc", None,
+    action, _ = await load_version(db, source, _pdf(tmp_path / "b.pdf", 300), "Doc", None,
                                    *_deps(fail_embedding=False))
 
     assert action == "dismissed"
