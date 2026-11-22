@@ -46,6 +46,12 @@ Working notes for the build. Not for the README.
 - Section structure depends on the parser's block types: a heading the parser types as a page header is lost as a section title, and its text joins the previous section (seen once: "A 10.3 Beispiel Prinzipschema ZEV-vZEV" in vse-wv-ch).
 - Section titles can contain parser markup: `<b>` tags, and words split across a line break ("Rundsteueremp-\nfänger"). Cleaning them changes the chunks, so it needs a raised `CHUNKER_VERSION` and a reload.
 - Footer blocks are still part of the section text, and so of chunks, although they are left out of the fingerprint; on the 11 cached parses 217 footers are long enough to be kept.
+- `GET /versions` returns every version's full `parsed_output`; it should return the version columns without it.
+- `QueryPipeline.run` returns the whole top 40 to the API caller; the eval runner needs only the source keys.
+- `log_answer`, `record_eval_run` and `save_eval_question` take JSON parameters; a misspelt key becomes null instead of an error.
+- `versions.became_current_at` is read by nothing yet; it is kept for the measure "delay between a source changing and the knowledge catching up".
+- The answer's confidence field recognises only an English "Confidence:" line, while answers end with "Konfidenz: …".
+- `ReductoParser._extract_sections` is private by name but called by `load_version` and the baseline script; it should be public.
 - The parsed-output cache is keyed on the full file's sha256 only, so it ignores `max_pages`; a cache file made with another page limit would be used silently.
 - `promote_version` reads the version's source before locking it; harmless while a version cannot move to another source.
 - If marking a failed version as failed itself fails (database unreachable), that error hides the original one.

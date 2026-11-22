@@ -99,6 +99,14 @@ Rows of `levels` and `scopes` come from `corpus.yaml`. Rows of the settings tabl
 
 Both views run with the caller's rights (`security_invoker`). Every table has row level security with no policies, and every write function is executable only by `service_role`.
 
+### JSON audit records
+
+The only JSON columns are raw records nobody queries by content (rule 5), plus the transport parameters of `log_answer`, `record_eval_run` and `save_eval_question`, whose shapes are in their SQL comments:
+
+- `versions.parsed_output`: the parser's response without `pdf_url`, `studio_link` and block `image_url`: `{usage, job_id, duration, parse_mode, response_type, document_properties, result: {type, ocr, custom, chunks: [{content, embed, enriched, enrichment_success, blocks: [{type, content, bbox: {page, original_page, top, left, width, height}, confidence, granular_confidence, extra, chart_data}]}]}}`. Sections and the text fingerprint are derived from `result.chunks[].blocks[]`.
+- `answers.retrieved_chunks` (top 40) and `answers.reranked_chunks` (top 8, plus `rerank_score`): rows as `match_chunks` returns them: `{id, version_id, source_key, content, section_title, page_number, chunk_index, level, rank, scopes, similarity, version_title, version_label}`. `id` names a chunk that is deleted when its version retires, so it is a record, not a reference; the reference is `answer_versions`.
+- `flags.detail`: `{"file": …}` or `{"address": …}`, with an optional `"message"`, checked by `flags_detail_shape`.
+
 ## Lifecycle
 
 **Routine load** (`scripts/load_corpus.py` → `load_version`):
