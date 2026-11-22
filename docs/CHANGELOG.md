@@ -74,6 +74,8 @@ Each entry: what changed and why, then the evidence. Measurements live in [basel
   Evidence: real-database tests for discarding by a person, resolving an unreachable flag, and refusing flags that hold a failed version, are not check failures, or are already resolved; script tests; 474 tests pass with the database tests.
 - **The database owns a source's watch address: the loader sets it, and stamps `confirmed_at`, only when it creates a source; for an existing source it reports a differing address in `corpus.yaml` and changes nothing. A person changes it with `flags.py set-address` (or by approving a candidate), which confirms the source.** A routine load would have undone an approval's address and recorded a confirmation nobody made (whole-branch review).
   Evidence: real-database tests: an existing source keeps its address and confirmation, a routine save never confirms or resolves an overdue flag, `set_watch_address` confirms and resolves it; loader and script tests; 482 tests pass with the database tests.
+- **The embedding input is guarded: `display_title` and `embedding_input` live in `embedder.py`, recorded under both `CHUNKER_VERSION` and `PROMPT_VERSION`; and the API refuses to start when the configured indexing settings differ from the current versions'.** A change to the title format would have embedded new chunks under an unchanged settings key, and a changed `.env` would have embedded queries differently from the stored chunks without notice (whole-branch review).
+  Evidence: guard tests per (file, constant); startup tests for a mismatching store and an empty one; the prompt text is unchanged by the move; 488 tests pass with the database tests.
 
 ## 2026-11-21
 

@@ -32,6 +32,13 @@ def build_dependencies():
     reranker = CohereReranker(api_key=settings.cohere_api_key, top_n=settings.rerank_top_n,
                               model=settings.rerank_model)
     indexing_settings, answer_settings = indexing_settings_row(settings), answer_settings_row(settings)
+    stored = [k for k in db.current_indexing_settings_keys() if k != indexing_settings["key"]]
+    if stored:
+        raise RuntimeError(
+            f"current versions were loaded with indexing settings {', '.join(stored)}, but the "
+            f"configuration gives {indexing_settings['key']}: queries would be embedded differently "
+            "from the stored chunks. Restore the settings, or reload into a fresh store."
+        )
     db.save_indexing_settings(indexing_settings)
     db.save_answer_settings(answer_settings)
     formatter = ResponseFormatter()

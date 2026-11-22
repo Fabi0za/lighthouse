@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from app.generation.prompts import display_title
+from app.ingestion.embedder import display_title
 
 
 class ResponseFormatter:

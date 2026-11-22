@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.ingestion.embedder import display_title  # shared with the embedding input; guarded there too
+
 # Raise when a change to this file, or to how the reranker picks the top chunks
 # (app/retrieval/reranker.py), changes what the model is given: answers record it through
 # their answer settings. tests/test_versioned_constants.py guards both files.
@@ -17,11 +19,6 @@ Rules:
 5. Only refuse to answer if the provided context contains no relevant information at all. In that case say: "Ich habe nicht genügend Informationen, um diese Frage sicher zu beantworten." If the context contains partial or related information, use it to answer as precisely as possible and note any limitations.
 6. When synthesizing across multiple documents, clearly indicate which information comes from which source.
 7. End your response with a confidence assessment: high, medium, or low."""
-
-
-def display_title(title: str, version_label: str | None) -> str:
-    """A version's title as shown to the model and in citations: title and printed label."""
-    return f"{title} ({version_label})" if version_label else title
 
 
 def source_line(chunk: dict[str, Any]) -> str:

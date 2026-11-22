@@ -5,10 +5,17 @@ import asyncio
 import cohere
 from cohere.errors import TooManyRequestsError
 
-from app.generation.prompts import display_title
-
 # Cohere's v2 embed endpoint accepts at most 96 texts per request.
 MAX_BATCH = 96
+
+
+def display_title(title: str, version_label: str | None) -> str:
+    """A version's title as embedded, shown to the model and cited: title and printed label.
+
+    It shapes both the embedding input and the prompt, so this file is guarded by both
+    CHUNKER_VERSION and PROMPT_VERSION (tests/test_versioned_constants.py).
+    """
+    return f"{title} ({version_label})" if version_label else title
 
 
 def embedding_input(version_title: str, version_label: str | None, section_title: str, content: str) -> str:
