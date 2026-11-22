@@ -87,11 +87,12 @@ def make_reference_rows(conn) -> None:
     )
 
 
-def make_source(conn, key: str = "source", address: str | None = None,
+def make_source(conn, key: str = "source", watch_address: str | None = None,
                 level: str = "operator") -> str:
     """A source; an operator-level source gets scope bkw so it passes the scope rule."""
     make_reference_rows(conn)
-    conn.execute("insert into sources (key, level, address) values (%s, %s, %s)", (key, level, address))
+    conn.execute("insert into sources (key, level, watch_address) values (%s, %s, %s)",
+                 (key, level, watch_address))
     if level == "operator":
         conn.execute("insert into source_scopes (source_key, scope_key) values (%s, 'bkw')", (key,))
     return key
@@ -113,14 +114,14 @@ def make_version(
     file_sha256: str | None = None,
     ingestion_status: str = "completed",
     retired_at: str | None = None,
-    address: str | None = None,
+    obtained_from: str | None = None,
 ) -> str:
     if status == "pending" and flag_id is None:
         flag_id = make_flag(conn, source_key)
     return str(conn.execute(
-        "insert into versions (source_key, status, flag_id, title, address, file_sha256, "
+        "insert into versions (source_key, status, flag_id, title, obtained_from, file_sha256, "
         "text_sha256, ingestion_status, retired_at) "
         "values (%s, %s, %s, 'Doc', %s, %s, %s, %s, %s) returning id",
-        (source_key, status, flag_id, address, file_sha256 or uuid.uuid4().hex,
+        (source_key, status, flag_id, obtained_from, file_sha256 or uuid.uuid4().hex,
          text_sha256, ingestion_status, retired_at),
     ).fetchone()[0])

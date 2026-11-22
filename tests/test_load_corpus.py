@@ -36,10 +36,11 @@ sources:
   - key: national-rules
     level: national
     versions:
-      - {path: a.pdf, title: "National rules 2025", address: "https://example.org/a.pdf"}
+      - {path: a.pdf, title: "National rules 2025", obtained_from: "https://example.org/a.pdf"}
   - key: op-rules
     level: operator
     scopes: [x, y]
+    watch_address: "https://example.org/op.pdf"
     versions:
       - {path: v1.pdf, title: "Operator rules (V1)"}
       - {path: v2.pdf, title: "Operator rules (V2)", max_pages: 4}
@@ -58,11 +59,12 @@ def test_load_corpus_reads_sources_and_versions(tmp_path):
     assert (national.key, national.level, national.scopes) == ("national-rules", "national", [])
     for gone in ("authority_rank", "title", "issuer", "listing_address"):
         assert not hasattr(national, gone), gone
-    assert national.versions[0].address == "https://example.org/a.pdf"
+    assert national.versions[0].obtained_from == "https://example.org/a.pdf"
+    assert (national.watch_address, operator.watch_address) == (None, "https://example.org/op.pdf")
     assert (operator.key, operator.scopes) == ("op-rules", ["x", "y"])
     assert [v.path for v in operator.versions] == ["v1.pdf", "v2.pdf"]
     assert operator.versions[1].max_pages == 4
-    assert operator.versions[0].address is None
+    assert operator.versions[0].obtained_from is None
 
 
 def test_load_corpus_reports_all_problems(tmp_path):
@@ -144,10 +146,11 @@ async def test_load_all_saves_each_source_and_loads_versions_in_order(tmp_path, 
     _files(tmp_path)
     sources = lc.load_corpus(_corpus(tmp_path, GOOD), tmp_path)
     db = MagicMock()
-    db.find_source.side_effect = [None, {"key": "op-rules", "level": "operator", "scopes": ["x", "y"]}]
+    db.find_source.side_effect = [None, {"key": "op-rules", "level": "operator", "scopes": ["x", "y"],
+                                         "watch_address": "https://example.org/op.pdf"}]
     calls = []
 
-    async def fake_load(db_, source_key, file, title, address, *rest, max_pages=None, stored_path=None,
+    async def fake_load(db_, source_key, file, title, obtained_from, *rest, max_pages=None, stored_path=None,
                         parsed_cache=None):
         calls.append((source_key, stored_path, max_pages))
         return "promoted", "d"
@@ -155,7 +158,8 @@ async def test_load_all_saves_each_source_and_loads_versions_in_order(tmp_path, 
     counts = await lc.load_all(sources, tmp_path, db, None, None, None, load=fake_load)
 
     assert [c.args for c in db.save_source.call_args_list] == [
-        ("national-rules", "national", []), ("op-rules", "operator", ["x", "y"])]
+        ("national-rules", "national", [], None),
+        ("op-rules", "operator", ["x", "y"], "https://example.org/op.pdf")]
     assert calls == [("national-rules", "a.pdf", None), ("op-rules", "v1.pdf", None),
                      ("op-rules", "v2.pdf", 4)]
     assert counts == {"promoted": 3}
@@ -171,7 +175,7 @@ async def test_load_all_stops_a_source_after_a_failure(tmp_path):
     db.find_source.return_value = None
     loaded = []
 
-    async def fake_load(db_, source, file, title, address, *rest, max_pages=None, stored_path=None,
+    async def fake_load(db_, source_key, file, title, obtained_from, *rest, max_pages=None, stored_path=None,
                         parsed_cache=None):
         loaded.append(stored_path)
         if stored_path == "v1.pdf":
@@ -224,12 +228,14 @@ async def test_load_all_reports_changed_level_and_scopes(tmp_path, capsys):
     _files(tmp_path)
     sources = lc.load_corpus(_corpus(tmp_path, GOOD), tmp_path)[1:]  # the operator source
     db = MagicMock()
-    db.find_source.return_value = {"key": "op-rules", "level": "national", "scopes": ["x"]}
+    db.find_source.return_value = {"key": "op-rules", "level": "national", "scopes": ["x"],
+                                   "watch_address": None}
 
     await lc.load_all(sources, tmp_path, db, None, None, None, load=_noop_load)
 
-    db.save_source.assert_called_once_with("op-rules", "operator", ["x", "y"])
+    db.save_source.assert_called_once_with("op-rules", "operator", ["x", "y"], "https://example.org/op.pdf")
     out = capsys.readouterr().out
     assert "updated source 'op-rules'" in out
     assert "level 'national' -> 'operator'" in out
     assert "scopes ['x'] -> ['x', 'y']" in out
+    assert "watch address None -> 'https://example.org/op.pdf' (reconfirmed)" in out

@@ -39,7 +39,7 @@ async def load_version(
     source_key: str,
     file: Path,
     title: str,
-    address: str | None,
+    obtained_from: str | None,
     parser,
     chunker,
     embedder,
@@ -68,7 +68,7 @@ async def load_version(
             db.delete_pending_version(v["id"], "dismissed (reload)")
     versions = [v for v in versions if v.get("file_sha256") != file_hash]
 
-    doc = db.hold_version(source_key, title, address, stored_path or str(file), file_hash)
+    doc = db.hold_version(source_key, title, obtained_from, stored_path or str(file), file_hash)
     doc_id = doc["id"]
     try:
         db.update_version(doc_id, {"ingestion_status": "processing"})

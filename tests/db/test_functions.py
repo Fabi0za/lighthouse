@@ -54,15 +54,21 @@ def search_ids(conn) -> set:
 
 def test_promote_first_version(pg):
     s = make_source(pg)
-    d = make_version(pg, s, address="https://example.org/v1.pdf", text_sha256="t1")
+    d = make_version(pg, s, obtained_from="https://example.org/v1.pdf", text_sha256="t1")
     promote(pg, d)
     row = doc(pg, d)
     assert row["status"] == "current"
     assert row["became_current_at"] is not None
     assert flag_of(pg, d)["resolved_at"] is not None
     assert flag_of(pg, d)["resolution"] == "promoted (auto)"
-    addr = pg.execute("select address from sources where key = %s", (s,)).fetchone()[0]
-    assert addr == "https://example.org/v1.pdf"
+
+
+def test_promote_leaves_source_alone(pg):
+    s = make_source(pg, watch_address="https://example.org/watched.pdf")
+    before = pg.execute("select watch_address, confirmed_at from sources where key = %s", (s,)).fetchone()
+    promote(pg, make_version(pg, s, obtained_from="https://example.org/elsewhere.pdf", text_sha256="t1"))
+    after = pg.execute("select watch_address, confirmed_at from sources where key = %s", (s,)).fetchone()
+    assert after == before
 
 
 def test_promote_retires_previous(pg):
@@ -82,16 +88,6 @@ def test_promote_retires_previous(pg):
     assert (old["file_sha256"], old["text_sha256"]) == ("f1", "t1")
     assert doc(pg, v2)["status"] == "current"
     assert chunk_count(pg, v2) == 1
-
-
-def test_promote_keeps_address_when_null(pg):
-    s = make_source(pg)
-    v1 = make_version(pg, s, address="https://example.org/a.pdf", text_sha256="t1")
-    promote(pg, v1)
-    v2 = make_version(pg, s, address=None, text_sha256="t2")
-    promote(pg, v2)
-    addr = pg.execute("select address from sources where key = %s", (s,)).fetchone()[0]
-    assert addr == "https://example.org/a.pdf"
 
 
 def test_promote_not_loaded_fails_atomically(pg_db_url):

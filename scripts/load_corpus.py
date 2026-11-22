@@ -46,7 +46,7 @@ VERSION_FIELDS = ("path", "title")
 class CorpusVersion:
     path: str
     title: str
-    address: str | None
+    obtained_from: str | None
     max_pages: int | None
 
 
@@ -55,6 +55,7 @@ class CorpusSource:
     key: str
     level: str
     scopes: list[str]
+    watch_address: str | None
     versions: list[CorpusVersion] = field(default_factory=list)
 
 
@@ -110,11 +111,14 @@ def load_corpus(corpus_path: Path, repo_root: Path) -> list[CorpusSource]:
             seen_paths.add(rv["path"])
             versions.append(CorpusVersion(
                 path=rv["path"], title=rv["title"],
-                address=rv.get("address") or None, max_pages=max_pages,
+                obtained_from=rv.get("obtained_from") or None, max_pages=max_pages,
             ))
 
         seen_keys.add(raw["key"])
-        sources.append(CorpusSource(key=raw["key"], level=raw["level"], scopes=scopes, versions=versions))
+        sources.append(CorpusSource(
+            key=raw["key"], level=raw["level"], scopes=scopes,
+            watch_address=raw.get("watch_address") or None, versions=versions,
+        ))
 
     if problems:
         raise ValueError("corpus.yaml has problems:\n  " + "\n  ".join(problems))
@@ -149,6 +153,8 @@ def report_source(stored: dict | None, s: CorpusSource) -> None:
         notes.append(f"level {stored['level']!r} -> {s.level!r}")
     if sorted(stored["scopes"]) != sorted(s.scopes):
         notes.append(f"scopes {sorted(stored['scopes'])} -> {sorted(s.scopes)}")
+    if stored.get("watch_address") != s.watch_address:
+        notes.append(f"watch address {stored.get('watch_address')!r} -> {s.watch_address!r} (reconfirmed)")
     if notes:
         print(f"updated source {s.key!r}: " + "; ".join(notes))
 
@@ -160,14 +166,14 @@ async def load_all(sources, repo_root, db, parser, chunker, embedder, load=None,
     counts: Counter[str] = Counter()
     for s in sources:
         report_source(db.find_source(s.key), s)
-        db.save_source(s.key, s.level, s.scopes)
+        db.save_source(s.key, s.level, s.scopes, s.watch_address)
         for k, v in enumerate(s.versions):
             cached = cached_output(parsed_cache, file_sha256(repo_root / v.path))
             print(f"{v.path} ..." + (f" (parser output from cache: {cached.name})" if cached else ""),
                   flush=True)
             try:
                 action, doc_id = await load(
-                    db, s.key, repo_root / v.path, v.title, v.address,
+                    db, s.key, repo_root / v.path, v.title, v.obtained_from,
                     parser, chunker, embedder, max_pages=v.max_pages, stored_path=v.path,
                     parsed_cache=parsed_cache,
                 )

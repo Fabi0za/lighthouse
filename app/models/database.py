@@ -21,20 +21,24 @@ class DatabaseClient:
     def find_source(self, key: str) -> dict[str, Any] | None:
         """The stored source with its level and sorted scope keys, or None."""
         rows = (
-            self.client.table("sources").select("key, level, source_scopes(scope_key)")
+            self.client.table("sources").select("key, level, watch_address, source_scopes(scope_key)")
             .eq("key", key).execute().data
         )
         if not rows:
             return None
         row = rows[0]
-        return {"key": row["key"], "level": row["level"],
+        return {"key": row["key"], "level": row["level"], "watch_address": row["watch_address"],
                 "scopes": sorted(s["scope_key"] for s in row.get("source_scopes") or [])}
 
-    def save_source(self, key: str, level: str, scopes: list[str]) -> None:
-        """Insert or update a source and replace its scopes, in one transaction."""
-        self.client.rpc(
-            "save_source", {"p_key": key, "p_level": level, "p_scopes": list(scopes)}
-        ).execute()
+    def save_source(self, key: str, level: str, scopes: list[str], watch_address: str | None) -> None:
+        """Insert or update a source and replace its scopes, in one transaction.
+
+        A new source, or a new watch address, stamps the source's confirmation date.
+        """
+        self.client.rpc("save_source", {
+            "p_key": key, "p_level": level, "p_scopes": list(scopes),
+            "p_watch_address": watch_address,
+        }).execute()
 
     def list_source_keys(self) -> list[str]:
         rows = self.client.table("sources").select("key").execute().data
@@ -71,7 +75,7 @@ class DatabaseClient:
         self,
         source_key: str,
         title: str,
-        address: str | None,
+        obtained_from: str | None,
         file_path: str | None,
         file_sha256: str,
         kind: str = "new_version",
@@ -85,7 +89,7 @@ class DatabaseClient:
             "status": "pending",
             "flag_id": flag["id"],
             "title": title,
-            "address": address,
+            "obtained_from": obtained_from,
             "file_path": file_path,
             "file_sha256": file_sha256,
             "ingestion_status": "pending",

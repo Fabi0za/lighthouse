@@ -137,14 +137,17 @@ def test_find_source_returns_none_when_missing(db, mock_supabase):
 
 def test_find_source_returns_level_and_sorted_scopes(db, mock_supabase):
     mock_supabase.execute.return_value = MagicMock(data=[
-        {"key": "s", "level": "operator", "source_scopes": [{"scope_key": "ekz"}, {"scope_key": "bkw"}]}])
-    assert db.find_source("s") == {"key": "s", "level": "operator", "scopes": ["bkw", "ekz"]}
+        {"key": "s", "level": "operator", "watch_address": None,
+         "source_scopes": [{"scope_key": "ekz"}, {"scope_key": "bkw"}]}])
+    assert db.find_source("s") == {"key": "s", "level": "operator", "watch_address": None,
+                                   "scopes": ["bkw", "ekz"]}
 
 
 def test_save_source_calls_rpc(db, mock_supabase):
-    db.save_source("s", "operator", ["bkw"])
+    db.save_source("s", "operator", ["bkw"], "https://example.org/s.pdf")
     mock_supabase.rpc.assert_called_once_with(
-        "save_source", {"p_key": "s", "p_level": "operator", "p_scopes": ["bkw"]})
+        "save_source", {"p_key": "s", "p_level": "operator", "p_scopes": ["bkw"],
+                        "p_watch_address": "https://example.org/s.pdf"})
 
 
 def test_list_source_keys(db, mock_supabase):

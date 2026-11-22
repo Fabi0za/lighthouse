@@ -16,6 +16,8 @@ Each entry: what changed and why, then the evidence. Measurements live in [basel
   Evidence: database tests for unknown level, unknown scope, duplicate rank, the stated rank direction and the scope foreign key on answers; "Bekzahl" no longer matches `ekz`; 183 tests pass with the database tests.
 - **Sources are identified by a fixed readable key; title, issuer and listing address are gone from sources; the database refuses a source of a scope-requiring level without a scope.** The loader matched sources by title, so renaming a title made a new source, and the scope rule lived only in Python.
   Evidence: database tests for key format, immutable key, `save_source` replacing scopes and level, and the deferred scope rule on insert and on removing the last scope; 190 tests pass with the database tests.
+- **A source's watch address is set by a person (`corpus.yaml`), and adding the source or changing that address stamps `confirmed_at`; a version's `obtained_from` cannot change; promotion no longer moves the source's address.** The address moved silently on every promotion and the confirmation date was never written.
+  Evidence: database tests: a new source is confirmed, the same address keeps the date across transactions, a new address gives a later date, `obtained_from` cannot be changed, promotion leaves the source untouched; 195 tests pass with the database tests.
 
 ## 2026-11-21
 

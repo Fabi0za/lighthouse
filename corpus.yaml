@@ -8,7 +8,8 @@
 #
 # level: national | operator (rank 1 | 2 in the levels table; higher rank wins).
 # scopes: where the source applies; required for operator sources, none = applies everywhere.
-# address: where the version was published; left out where not known.
+# watch_address: the address a person decided to watch for this source.
+# obtained_from: where the version was obtained; left out where not known.
 # Optional max_pages: load only the first N pages.
 
 sources:
@@ -45,10 +46,10 @@ sources:
     versions:
       - path: "data/BKW/DE_Vorgaben_BKW_V1.2.pdf"
         title: "Vorgaben an Niederspannungs-Installationen im Verteilnetz der BKW (V1.2, gültig ab 01.03.2025)"
-        address: "https://www.bkw.ch/fileadmin/user_upload/03_Energie/03_04_Stromnetz/Netzanschluss/BKW_Fachpartner/DE_Vorgaben_BKW_V1.2.pdf"
+        obtained_from: "https://www.bkw.ch/fileadmin/user_upload/03_Energie/03_04_Stromnetz/Netzanschluss/BKW_Fachpartner/DE_Vorgaben_BKW_V1.2.pdf"
       - path: "data/BKW/20250521_DE_Vorgaben_BKW_V1.3.pdf"
         title: "Vorgaben an Niederspannungs-Installationen im Verteilnetz der BKW (V1.3, gültig ab 21.05.2025)"
-        address: "https://www.bkw.ch/fileadmin/user_upload/03_Energie/03_04_Stromnetz/Netzanschluss/BKW_Fachpartner/20250521_DE_Vorgaben_BKW_V1.3.pdf"
+        obtained_from: "https://www.bkw.ch/fileadmin/user_upload/03_Energie/03_04_Stromnetz/Netzanschluss/BKW_Fachpartner/20250521_DE_Vorgaben_BKW_V1.3.pdf"
 
   - key: bkw-notfallsteuerung
     level: operator

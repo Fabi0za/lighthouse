@@ -30,7 +30,7 @@ create table scopes (
 create table sources (
     key text primary key check (key ~ '^[a-z0-9]+(-[a-z0-9]+)*$'),
     level text not null references levels(key),
-    address text unique,              -- address watched now; moves on promotion
+    watch_address text unique,        -- address a person decided to watch
     confirmed_at timestamptz,         -- last confirmed by a person; null = never
     created_at timestamptz not null default now()
 );
@@ -109,7 +109,7 @@ create table versions (
         check (status in ('pending', 'current', 'retired')),
     flag_id uuid references flags(id),
     title text not null,              -- as shown to the model, with version label
-    address text,                     -- where this version was obtained
+    obtained_from text,               -- where this version was obtained; never changes once set
     file_path text,
     file_sha256 text not null,        -- hash of the file bytes
     text_sha256 text,                 -- hash of normalised parsed text; decides "new version"
@@ -127,8 +127,9 @@ create table versions (
 create unique index versions_one_current_per_source
     on versions (source_key) where status = 'current';
 
--- Fingerprints never change once set: a version cannot be rewritten in place.
-create function versions_fingerprints_immutable() returns trigger
+-- What a version is and where it came from never change once set: it cannot be
+-- rewritten in place.
+create function versions_record_immutable() returns trigger
 language plpgsql as $$
 begin
     if new.file_sha256 is distinct from old.file_sha256
@@ -136,12 +137,16 @@ begin
         raise exception 'fingerprints of version % cannot change', old.id
             using errcode = '23514';
     end if;
+    if old.obtained_from is not null and new.obtained_from is distinct from old.obtained_from then
+        raise exception 'obtained_from of version % cannot change', old.id
+            using errcode = '23514';
+    end if;
     return new;
 end $$;
 
-create trigger versions_fingerprints_immutable
+create trigger versions_record_immutable
     before update on versions
-    for each row execute function versions_fingerprints_immutable();
+    for each row execute function versions_record_immutable();
 
 -- A flag cannot be resolved while a pending version still points at it.
 create function flags_resolve_guard() returns trigger
@@ -250,7 +255,7 @@ create table eval_runs (
 -- ---------------------------------------------------------------------------
 
 -- Make a pending, fully loaded version current; retire the previous current
--- version and delete its chunks; move the source's address; resolve the flag.
+-- version and delete its chunks; resolve the flag. The source is not changed.
 create function promote_version(p_version_id uuid, p_resolution text) returns void
 language plpgsql as $$
 declare
@@ -275,9 +280,6 @@ begin
         where source_key = v.source_key and status = 'current';
     update versions set status = 'current', became_current_at = now()
         where id = p_version_id;
-    if v.address is not null then
-        update sources set address = v.address where key = v.source_key;
-    end if;
     update flags set resolved_at = now(), resolution = p_resolution where id = v.flag_id;
 end $$;
 
@@ -323,13 +325,21 @@ begin
     return v_id;
 end $$;
 
--- Insert or update a source's level and replace its scopes, in one transaction.
-create function save_source(p_key text, p_level text, p_scopes text[]) returns void
+-- Insert or update a source's level, watch address and scopes, in one transaction.
+-- Called when a person has listed the source (corpus.yaml): adding the source or
+-- setting a new watch address stamps confirmed_at; otherwise it is kept.
+create function save_source(p_key text, p_level text, p_scopes text[], p_watch_address text)
+returns void
 language plpgsql as $$
 begin
-    insert into sources (key, level) values (p_key, p_level)
-        on conflict (key) do update set level = excluded.level
-        where sources.level is distinct from excluded.level;
+    insert into sources (key, level, watch_address, confirmed_at)
+        values (p_key, p_level, p_watch_address, now())
+        on conflict (key) do update set
+            level = excluded.level,
+            watch_address = excluded.watch_address,
+            confirmed_at = case
+                when sources.watch_address is distinct from excluded.watch_address then now()
+                else sources.confirmed_at end;
     delete from source_scopes where source_key = p_key and scope_key <> all (p_scopes);
     insert into source_scopes (source_key, scope_key)
         select p_key, unnest(p_scopes) on conflict do nothing;
@@ -414,4 +424,4 @@ alter table eval_runs enable row level security;
 revoke execute on function promote_version(uuid, text) from public, anon, authenticated;
 revoke execute on function reject_version(uuid, text) from public, anon, authenticated;
 revoke execute on function log_answer(jsonb, uuid[]) from public, anon, authenticated;
-revoke execute on function save_source(text, text, text[]) from public, anon, authenticated;
+revoke execute on function save_source(text, text, text[], text) from public, anon, authenticated;

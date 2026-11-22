@@ -201,8 +201,8 @@ def test_source_key_immutable(pg):
         pg.execute("update sources set key = 'other' where key = %s", (s,))
 
 
-def _save(conn, key, level, scopes):
-    conn.execute("select save_source(%s, %s, %s::text[])", (key, level, scopes))
+def _save(conn, key, level, scopes, watch_address=None):
+    conn.execute("select save_source(%s, %s, %s::text[], %s)", (key, level, scopes, watch_address))
 
 
 def _scopes(conn, key):
@@ -244,4 +244,54 @@ def test_save_source_replaces_scopes_and_level(pg):
     _save(pg, "s", "national", [])
     assert _scopes(pg, "s") == []
     assert pg.execute("select level from sources where key = 's'").fetchone()[0] == "national"
+
+
+# --- watch address and confirmation ------------------------------------------
+
+def _confirmed(conn, key):
+    return conn.execute("select confirmed_at from sources where key = %s", (key,)).fetchone()[0]
+
+
+def test_new_source_is_confirmed(pg):
+    make_reference_rows(pg)
+    _save(pg, "n", "national", [], "https://example.org/n.pdf")
+    assert _confirmed(pg, "n") is not None
+
+
+def test_same_address_keeps_confirmation(pg_db_url):
+    with psycopg.connect(pg_db_url) as conn:
+        make_reference_rows(conn)
+        _save(conn, "n", "national", [], "https://example.org/n.pdf")
+        conn.commit()
+        first = _confirmed(conn, "n")
+        conn.commit()
+        _save(conn, "n", "national", [], "https://example.org/n.pdf")
+        conn.commit()
+        assert _confirmed(conn, "n") == first
+
+
+def test_new_address_reconfirms(pg_db_url):
+    with psycopg.connect(pg_db_url) as conn:
+        make_reference_rows(conn)
+        _save(conn, "n", "national", [], "https://example.org/old.pdf")
+        conn.commit()
+        first = _confirmed(conn, "n")
+        conn.commit()
+        _save(conn, "n", "national", [], "https://example.org/new.pdf")
+        conn.commit()
+        assert _confirmed(conn, "n") > first
+        assert conn.execute("select watch_address from sources where key = 'n'").fetchone()[0] \
+            == "https://example.org/new.pdf"
+
+
+def test_obtained_from_immutable(pg):
+    d = make_version(pg, make_source(pg), obtained_from="https://example.org/a.pdf")
+    with pytest.raises(errors.CheckViolation):
+        pg.execute("update versions set obtained_from = 'https://example.org/b.pdf' where id = %s", (d,))
+
+
+def test_sources_have_no_listing_address(pg):
+    cols = {r[0] for r in pg.execute(
+        "select column_name from information_schema.columns where table_name = 'sources'")}
+    assert "watch_address" in cols and not cols & {"address", "listing_address", "title", "issuer"}
 
