@@ -116,3 +116,15 @@ def test_role_sees_no_rows_through_views(pg, role):
     pg.execute(f"set local role {role}")
     for view in sorted(VIEWS):
         assert pg.execute(f"select count(*) from {view}").fetchone()[0] == 0, view
+
+
+def test_service_role_raises_flags_and_reads_views(pg):
+    from tests.db.conftest import make_reference_rows, make_source
+    make_reference_rows(pg)
+    s = make_source(pg)
+    pg.execute("set local role service_role")
+    v = pg.execute("select begin_load(%s, 'Doc', null, null, null, 'f1', 'test-a')", (s,)).fetchone()[0]
+    number = pg.execute("select fail_load(%s, 'load_failed', 'data/a.pdf', 'boom')", (v,)).fetchone()[0]
+    assert isinstance(number, int)  # the identity column works for service_role
+    for view in sorted(VIEWS):
+        pg.execute(f"select count(*) from {view}")
