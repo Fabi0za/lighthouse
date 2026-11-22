@@ -1,5 +1,7 @@
 # Repository rules
 
+The standard for schema, code and docs is in `docs/conventions.md`.
+
 This repository is public-facing. Keep history and files clean.
 
 ## Never commit

@@ -42,6 +42,8 @@ Working notes for the build. Not for the README.
 ## Known gaps
 
 - **Next: reinstating a retired version (undo).** A content revert (A, then B, then A) is skipped against the retired A, so B stays current with no open flag; undoing a wrong promotion has the same gap. Both need a function that sets a retired version back to held under a candidate flag and rebuilds its chunks from `parsed_output`.
+- **After the cleanup: a scope filter in search**, as its own step with its own measurement. pgvector applies a filter after the HNSW scan, so a filtered search can return fewer than the requested count; it needs iterative scans (pgvector 0.8+) or exact search, and a test that a filtered search still returns the full count.
+- Footer blocks are still part of the section text, and so of chunks, although they are left out of the fingerprint; on the 11 cached parses 217 footers are long enough to be kept.
 - The parsed-output cache is keyed on the full file's sha256 only, so it ignores `max_pages`; a cache file made with another page limit would be used silently.
 - `promote_version` reads the version's source before locking it; harmless while a version cannot move to another source.
 - If marking a failed version as failed itself fails (database unreachable), that error hides the original one.
