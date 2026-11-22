@@ -138,3 +138,36 @@ def test_answers_have_no_detected_filters(pg):
         "select column_name from information_schema.columns where table_name = 'answers'")}
     assert "detected_scope" in cols and "detected_filters" not in cols
 
+
+
+# --- answers_that_saw --------------------------------------------------------
+
+def _log(conn, question, version_ids, at):
+    answer_id = conn.execute("select log_answer(%s::jsonb, %s::uuid[])", (json.dumps(
+        {"question": question, "llm_prompt": "p", "llm_response": "r", "model_used": "m", "latency_ms": 1}),
+        version_ids)).fetchone()[0]
+    conn.execute("update answers set created_at = %s where id = %s", (at, answer_id))
+    return answer_id
+
+
+def test_answers_that_saw_lists_answers_newest_first_with_the_other_versions(pg):
+    a, b = make_source(pg, key="bkw-vorgaben"), make_source(pg, key="bkw-notfall")
+    va = make_version(pg, a, status="current", version_label="V1.2")
+    vb = make_version(pg, b, status="current")  # no label: shown by title
+    other = make_version(pg, make_source(pg, key="unrelated"), status="current")
+    older = _log(pg, "Q1", [va], "2026-11-01")
+    newer = _log(pg, "Q2", [va, vb], "2026-11-20")
+    _log(pg, "Q3", [other], "2026-11-21")
+
+    rows = pg.execute("select * from answers_that_saw(%s)", (va,)).fetchall()
+
+    assert [(r[0], r[2], r[3]) for r in rows] == [
+        (newer, "Q2", ["bkw-notfall (Doc)"]),
+        (older, "Q1", []),
+    ]
+    assert rows[0][1] > rows[1][1]
+
+
+def test_answers_that_saw_an_unseen_version_is_empty(pg):
+    v = make_version(pg, make_source(pg), status="current")
+    assert pg.execute("select * from answers_that_saw(%s)", (v,)).fetchall() == []

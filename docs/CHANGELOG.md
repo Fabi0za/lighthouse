@@ -30,6 +30,8 @@ Each entry: what changed and why, then the evidence. Measurements live in [basel
   Evidence: real-database load tests: a routine load and a repackaged file leave no flag, a parser timeout gives `parse_failed`, an embedding failure gives `load_failed` and the retry resolves it `fixed` by `system`, a crashed load is resumed; 271 tests pass.
 - **A person approves or rejects a held candidate (approval moves the watch address to the candidate's address and confirms the source), a monitor can report an unreachable address, and sources unconfirmed for longer than a given age are flagged once each; confirming resolves that flag.** These are the brief's flagged cases; until now only the schema allowed them.
   Evidence: database tests for hold and approve, approval refused without `obtained_from`, one open overdue flag per source, confirmation and a new watch address resolving it; 300 tests pass with the database tests.
+- **`scripts/answers.py saw` lists the answers that saw a version (by source key and label, or by id): date, question and the other versions each answer saw.** The brief requires listing earlier answers that relied on a retired version; the store held the links but nothing read them.
+  Evidence: `answers_that_saw` database tests (newest first, other versions named by label or title, empty for an unseen version); script tests; 308 tests pass with the database tests.
 
 ## 2026-11-21
 

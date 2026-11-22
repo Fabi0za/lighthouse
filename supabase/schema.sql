@@ -570,6 +570,21 @@ begin
         select p_key, unnest(p_scopes) on conflict do nothing;
 end $$;
 
+-- The answers that saw a version (it was among their top chunks), newest first, with
+-- the other versions each of them saw, as "<source key> (<label, or title if none>)".
+create function answers_that_saw(p_version_id uuid)
+returns table (answer_id uuid, created_at timestamptz, question text, other_versions text[])
+language sql stable as $$
+    select a.id, a.created_at, a.question,
+           array(select o.source_key || ' (' || coalesce(o.version_label, o.title) || ')'
+                 from answer_versions ao join versions o on o.id = ao.version_id
+                 where ao.answer_id = a.id and ao.version_id <> p_version_id
+                 order by 1)
+    from answers a
+    join answer_versions av on av.answer_id = a.id and av.version_id = p_version_id
+    order by a.created_at desc;
+$$;
+
 -- ---------------------------------------------------------------------------
 -- Search: current versions only
 -- ---------------------------------------------------------------------------

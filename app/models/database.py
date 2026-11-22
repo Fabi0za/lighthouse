@@ -65,6 +65,13 @@ class DatabaseClient:
             query = query.eq("source_key", source_key)
         return query.execute().data
 
+    def find_version(self, source_key: str, version_label: str) -> dict[str, Any] | None:
+        rows = (
+            self.client.table("versions").select("*")
+            .eq("source_key", source_key).eq("version_label", version_label).execute().data
+        )
+        return rows[0] if rows else None
+
     def begin_load(
         self,
         source_key: str,
@@ -158,6 +165,10 @@ class DatabaseClient:
     def get_answer(self, answer_id: uuid.UUID) -> dict[str, Any] | None:
         result = self.client.table("answers").select("*").eq("id", str(answer_id)).execute()
         return result.data[0] if result.data else None
+
+    def answers_that_saw(self, version_id: str) -> list[dict[str, Any]]:
+        """Answers that saw the version, newest first, each with the other versions it saw."""
+        return self.client.rpc("answers_that_saw", {"p_version_id": str(version_id)}).execute().data
 
     # --- evaluation ---------------------------------------------------------
 

@@ -177,3 +177,16 @@ def test_raise_overdue_flags_passes_days(db, mock_supabase):
     assert db.raise_overdue_flags(180) == 3
     mock_supabase.rpc.assert_called_once_with("raise_overdue_flags", {"p_max_age": "180 days"})
 
+
+
+def test_find_version_by_source_and_label(db, mock_supabase):
+    mock_supabase.execute.return_value = MagicMock(data=[{"id": "v12"}])
+    assert db.find_version("s", "V1.2") == {"id": "v12"}
+    calls = [c.args for c in mock_supabase.eq.call_args_list]
+    assert ("source_key", "s") in calls and ("version_label", "V1.2") in calls
+
+
+def test_answers_that_saw_calls_rpc(db, mock_supabase):
+    _rpc_returns(mock_supabase, [{"answer_id": "a"}])
+    assert db.answers_that_saw("v1") == [{"answer_id": "a"}]
+    mock_supabase.rpc.assert_called_once_with("answers_that_saw", {"p_version_id": "v1"})
