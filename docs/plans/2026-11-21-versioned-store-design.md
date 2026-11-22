@@ -42,7 +42,9 @@ Rows of `levels` and `scopes` come from `corpus.yaml`. Rows of the settings tabl
 
 - `sources (key, level → levels, watch_address unique, confirmed_at, created_at)`. The key is `publisher-publication`, lowercase, with no version or year. It is immutable (trigger `sources_key_immutable`, function `sources_key_immutable`).
 - `source_scopes (source_key, scope_key → scopes)`. The deferred constraint triggers `sources_scope_required` and `source_scopes_scope_required` (function `sources_scope_required`) refuse, at commit, a source whose level requires a scope but which has none.
-- `save_source(key, level, scopes, watch_address)` writes a source with its scopes in one transaction. Adding a source or changing its watch address stamps `confirmed_at` and resolves an open overdue flag (via `resolve_overdue`).
+- **`corpus.yaml` declares which sources exist and their starting address; the store holds what has happened since.**
+  - `save_source(key, level, scopes, watch_address)` writes a source's level and scopes in one transaction. It sets `watch_address` and `confirmed_at` only when it creates the source. For an existing source it keeps them, and the loader reports an address in `corpus.yaml` that differs from the store's.
+  - A person changes the address with `set_watch_address` (`scripts/flags.py set-address`), or by approving a candidate. Both stamp `confirmed_at` and resolve an open overdue flag (via `resolve_overdue`). A routine load never confirms a source.
 
 ### Flags
 

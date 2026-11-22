@@ -163,8 +163,15 @@ def test_confirm_unknown_source_refused(pg):
         pg.execute("select confirm_source('nope')")
 
 
-def test_save_source_with_new_address_resolves_overdue(pg):
+def test_set_watch_address_resolves_overdue(pg):
+    s = make_source(pg, level="national")
+    pg.execute("select raise_overdue_flags(interval '180 days')")
+    pg.execute("select set_watch_address(%s, 'https://example.org/new.pdf')", (s,))
+    assert _open(pg, s, "confirmation_overdue") == 0
+
+
+def test_routine_save_leaves_overdue_open(pg):
     s = make_source(pg, level="national")
     pg.execute("select raise_overdue_flags(interval '180 days')")
     pg.execute("select save_source(%s, 'national', '{}'::text[], 'https://example.org/new.pdf')", (s,))
-    assert _open(pg, s, "confirmation_overdue") == 0
+    assert _open(pg, s, "confirmation_overdue") == 1

@@ -6,10 +6,10 @@
 # scopes: where a source applies (an operator's network). key is how a question names it.
 #
 # A source is a watched publication. Its key never changes: publisher-publication,
-# lowercase, no version or year. Running the loader is a person listing the source:
-# adding it, or changing its watch_address, stamps its confirmation date.
+# lowercase, no version or year. Listing a new source confirms it.
 #   scopes: none = applies everywhere.
-#   watch_address: the address a person decided to watch; left out where not known.
+#   watch_address: the starting address to watch; left out where not known. After the
+#     source is created the store owns it: change it with scripts/flags.py set-address.
 #
 # Each entry under versions is one file of the source, listed OLDEST FIRST. The loader
 # promotes them in order, so a later version retires an earlier one. Versions are

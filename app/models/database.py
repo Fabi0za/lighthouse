@@ -30,9 +30,10 @@ class DatabaseClient:
                 "scopes": sorted(s["scope_key"] for s in row.get("source_scopes") or [])}
 
     def save_source(self, key: str, level: str, scopes: list[str], watch_address: str | None) -> None:
-        """Insert or update a source and replace its scopes, in one transaction.
+        """Insert or update a source's level and replace its scopes, in one transaction.
 
-        A new source, or a new watch address, stamps the source's confirmation date.
+        The watch address and the confirmation date are set only when the source is created;
+        for an existing source the store keeps them (see set_watch_address).
         """
         self.client.rpc("save_source", {
             "p_key": key, "p_level": level, "p_scopes": list(scopes),
@@ -168,6 +169,10 @@ class DatabaseClient:
         return self.client.rpc("raise_check_failed", {
             "p_source_key": source_key, "p_address": address, "p_message": message,
         }).execute().data
+
+    def set_watch_address(self, source_key: str, address: str) -> None:
+        """A person sets the address to watch for a source; this confirms the source."""
+        self.client.rpc("set_watch_address", {"p_source_key": source_key, "p_address": address}).execute()
 
     def confirm_source(self, source_key: str) -> None:
         """A person confirms the source; resolves its overdue flag."""

@@ -647,6 +647,17 @@ language sql as $$
         where source_key = p_source_key and kind = 'confirmation_overdue' and resolved_at is null;
 $$;
 
+-- A person sets the address to watch for a source; this confirms the source.
+create function set_watch_address(p_source_key text, p_address text) returns void
+language plpgsql as $$
+begin
+    update sources set watch_address = p_address, confirmed_at = now() where key = p_source_key;
+    if not found then
+        raise exception 'source % not found', p_source_key;
+    end if;
+    perform resolve_overdue(p_source_key);
+end $$;
+
 -- A person confirms that a source is still what is watched.
 create function confirm_source(p_source_key text) returns void
 language plpgsql as $$
@@ -699,24 +710,18 @@ begin
     return v_id;
 end $$;
 
--- Insert or update a source's level, watch address and scopes, in one transaction.
--- Called when a person has listed the source (corpus.yaml): adding the source or
--- setting a new watch address stamps confirmed_at; otherwise it is kept.
+-- Insert or update a source's level and scopes, in one transaction (scripts/load_corpus.py).
+-- corpus.yaml declares which sources exist and their starting address; the store owns what
+-- has happened since. So the watch address and confirmed_at are set only when the source
+-- is created (a person listing it confirms it); for an existing source they are kept, and
+-- a person changes the address with set_watch_address or by approving a candidate.
 create function save_source(p_key text, p_level text, p_scopes text[], p_watch_address text)
 returns void
 language plpgsql as $$
 begin
     insert into sources (key, level, watch_address, confirmed_at)
         values (p_key, p_level, p_watch_address, now())
-        on conflict (key) do update set
-            level = excluded.level,
-            watch_address = excluded.watch_address,
-            confirmed_at = case
-                when sources.watch_address is distinct from excluded.watch_address then now()
-                else sources.confirmed_at end;
-    if (select confirmed_at from sources where key = p_key) = now() then
-        perform resolve_overdue(p_key);   -- adding the source or a new address confirms it
-    end if;
+        on conflict (key) do update set level = excluded.level;
     delete from source_scopes where source_key = p_key and scope_key <> all (p_scopes);
     insert into source_scopes (source_key, scope_key)
         select p_key, unnest(p_scopes) on conflict do nothing;

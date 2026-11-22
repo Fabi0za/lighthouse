@@ -5,6 +5,7 @@ Usage:
     python scripts/flags.py approve VERSION_ID        # a held candidate becomes current
     python scripts/flags.py reject VERSION_ID         # a held candidate is retired
     python scripts/flags.py confirm SOURCE_KEY        # the source is still what is watched
+    python scripts/flags.py set-address SOURCE_KEY ADDRESS   # watch another address (confirms)
     python scripts/flags.py discard VERSION_ID        # give up a failed (or stuck loading) version
     python scripts/flags.py resolve FLAG_NUMBER       # a failed check is settled (e.g. address back)
     python scripts/flags.py raise-overdue [--max-age-days N]
@@ -32,6 +33,9 @@ def _parser() -> argparse.ArgumentParser:
                         ("reject", "a held candidate is retired")):
         sub.add_parser(name, help=help_).add_argument("version_id")
     sub.add_parser("confirm", help="a person confirms the source").add_argument("source_key")
+    watch = sub.add_parser("set-address", help="watch another address for a source (confirms it)")
+    watch.add_argument("source_key")
+    watch.add_argument("address")
     sub.add_parser("discard", help="give up a failed or stuck loading version").add_argument("version_id")
     sub.add_parser("resolve", help="settle an open check_failed flag").add_argument("flag_number", type=int)
     overdue = sub.add_parser("raise-overdue", help="flag sources not confirmed for too long")
@@ -81,6 +85,9 @@ def main(argv: list[str] | None = None, db=None, settings=None) -> int:
     elif args.command == "reject":
         db.reject_version(args.version_id)
         print(f"rejected {args.version_id}")
+    elif args.command == "set-address":
+        db.set_watch_address(args.source_key, args.address)
+        print(f"watching {args.address} for {args.source_key} (confirmed)")
     elif args.command == "discard":
         db.discard_version(args.version_id, resolved_by="person")
         print(f"discarded {args.version_id}")

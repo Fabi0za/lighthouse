@@ -269,3 +269,10 @@ def test_list_eval_runs_reads_the_view(db, mock_supabase):
 def test_save_eval_question_calls_rpc(db, mock_supabase):
     db.save_eval_question({"key": "q"})
     mock_supabase.rpc.assert_called_once_with("save_eval_question", {"p_question": {"key": "q"}})
+
+
+def test_set_watch_address_calls_rpc(db, mock_supabase):
+    db.set_watch_address("s", "https://example.org/new.pdf")
+    mock_supabase.rpc.assert_called_once_with(
+        "set_watch_address", {"p_source_key": "s", "p_address": "https://example.org/new.pdf"})
+

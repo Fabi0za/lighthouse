@@ -288,7 +288,8 @@ def test_same_address_keeps_confirmation(pg_db_url):
         assert _confirmed(conn, "n") == first
 
 
-def test_new_address_reconfirms(pg_db_url):
+def test_existing_source_keeps_its_address_and_confirmation(pg_db_url):
+    """The database owns the watch address: corpus.yaml only gives the starting one."""
     with psycopg.connect(pg_db_url) as conn:
         make_reference_rows(conn)
         _save(conn, "n", "national", [], "https://example.org/old.pdf")
@@ -297,9 +298,38 @@ def test_new_address_reconfirms(pg_db_url):
         conn.commit()
         _save(conn, "n", "national", [], "https://example.org/new.pdf")
         conn.commit()
-        assert _confirmed(conn, "n") > first
+        assert _confirmed(conn, "n") == first
         assert conn.execute("select watch_address from sources where key = 'n'").fetchone()[0] \
-            == "https://example.org/new.pdf"
+            == "https://example.org/old.pdf"
+
+
+def test_routine_save_never_confirms(pg_db_url):
+    with psycopg.connect(pg_db_url) as conn:
+        make_reference_rows(conn)
+        _save(conn, "n", "national", [], None)
+        conn.execute("update sources set confirmed_at = null where key = 'n'")  # e.g. never confirmed
+        conn.commit()
+        _save(conn, "n", "national", [], "https://example.org/a.pdf")
+        conn.commit()
+        assert _confirmed(conn, "n") is None
+
+
+def test_set_watch_address_confirms(pg_db_url):
+    with psycopg.connect(pg_db_url) as conn:
+        make_reference_rows(conn)
+        _save(conn, "n", "national", [], "https://example.org/old.pdf")
+        conn.commit()
+        first = _confirmed(conn, "n")
+        conn.commit()
+        conn.execute("select set_watch_address('n', 'https://example.org/new.pdf')")
+        conn.commit()
+        row = conn.execute("select watch_address, confirmed_at from sources where key = 'n'").fetchone()
+        assert row[0] == "https://example.org/new.pdf" and row[1] > first
+
+
+def test_set_watch_address_of_unknown_source_refused(pg):
+    with pytest.raises(errors.RaiseException):
+        pg.execute("select set_watch_address('nope', 'https://example.org/x.pdf')")
 
 
 def test_obtained_from_immutable(pg):

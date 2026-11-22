@@ -15,6 +15,10 @@ Each rule names where it is enforced. Details are in [the design](plans/2026-11-
 8. **One vocabulary** across database, code and docs. *Enforced:* `tests/test_vocabulary.py` (no old-project words, no old store names).
 9. **Rules live in the database and are tested against a real database.** *Enforced:* constraints, triggers and one SQL function per multi-step change; `tests/db/` runs on local Postgres with pgvector (`TEST_DATABASE_URL`).
 
+## What lives where
+
+`corpus.yaml` declares which sources exist, with their level, scopes and starting address, and lists their files. The store holds what has happened since: versions and their statuses, flags, confirmations, and the watch address once a person has changed it. A load never overwrites the store's history from the file.
+
 ## Fixed lists
 
 - Lists that grow or carry data are lookup tables with foreign keys: `levels`, `scopes`, `indexing_settings`, `answer_settings`.

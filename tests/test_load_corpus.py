@@ -354,7 +354,8 @@ async def test_load_all_reports_changed_level_scopes_and_address(tmp_path, capsy
     assert "updated source 'op-rules'" in out
     assert "level 'national' -> 'operator'" in out
     assert "scopes ['x'] -> ['x', 'y']" in out
-    assert "watch address None -> 'https://example.org/op.pdf' (reconfirmed)" in out
+    assert ("op-rules: corpus.yaml says 'https://example.org/op.pdf', store has None; "
+            "the store keeps its address (change it with scripts/flags.py set-address)") in out
 
 
 async def test_load_all_says_how_many_answers_saw_the_retired_version(tmp_path, capsys):

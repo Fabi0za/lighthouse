@@ -219,10 +219,11 @@ def report_source(stored: dict | None, s: CorpusSource) -> None:
         notes.append(f"level {stored['level']!r} -> {s.level!r}")
     if sorted(stored["scopes"]) != sorted(s.scopes):
         notes.append(f"scopes {sorted(stored['scopes'])} -> {sorted(s.scopes)}")
-    if stored.get("watch_address") != s.watch_address:
-        notes.append(f"watch address {stored.get('watch_address')!r} -> {s.watch_address!r} (reconfirmed)")
     if notes:
         print(f"updated source {s.key!r}: " + "; ".join(notes))
+    if stored.get("watch_address") != s.watch_address:
+        print(f"{s.key}: corpus.yaml says {s.watch_address!r}, store has {stored.get('watch_address')!r}; "
+              "the store keeps its address (change it with scripts/flags.py set-address)")
 
 
 async def load_all(corpus: Corpus, repo_root, db, parser, chunker, embedder, *,

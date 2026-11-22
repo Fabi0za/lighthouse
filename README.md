@@ -14,7 +14,7 @@ Lighthouse covers what has to happen from the moment a new version exists until 
 
 ## What a person does
 
-- Decides what is watched: sources, their levels, scopes and watch addresses, in `corpus.yaml`.
+- Decides what is watched: sources, their levels, scopes and starting addresses, in `corpus.yaml`; later address changes with `scripts/flags.py set-address`.
 - Resolves flags: approves or rejects a held candidate, confirms a source.
 - Re-confirms each source from time to time (`CONFIRMATION_MAX_AGE_DAYS`, default 180).
 

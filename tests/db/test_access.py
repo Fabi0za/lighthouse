@@ -18,6 +18,7 @@ WRITE_FUNCTIONS = {
     "fail_load": "select fail_load(gen_random_uuid(), 'load_failed', 'f', null)",
     "discard_version": "select discard_version(gen_random_uuid())",
     "resolve_check": "select resolve_check(1)",
+    "set_watch_address": "select set_watch_address('s', 'u')",
     "promote_version": "select promote_version(gen_random_uuid())",
     "reject_version": "select reject_version(gen_random_uuid())",
     "log_answer": "select log_answer('{}'::jsonb, '{}'::uuid[])",

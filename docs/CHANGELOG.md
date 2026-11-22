@@ -72,6 +72,8 @@ Each entry: what changed and why, then the evidence. Measurements live in [basel
   Evidence: a real-database load that fails after the fingerprint and is retried with other text ends current with its flag resolved; checks for the fixed fingerprint past loading and for the required fingerprint; 462 tests pass with the database tests.
 - **A person can resolve every flag: `flags.py discard VERSION_ID` gives up a failed or stuck loading version (its flag resolved as rejected), `flags.py resolve FLAG_NUMBER` settles a failed check such as an unreachable address; `flags.py list` also shows versions still loading, with their age.** Unreachable flags had no resolver, a load failure only a successful retry, and a crashed load was invisible (whole-branch review).
   Evidence: real-database tests for discarding by a person, resolving an unreachable flag, and refusing flags that hold a failed version, are not check failures, or are already resolved; script tests; 474 tests pass with the database tests.
+- **The database owns a source's watch address: the loader sets it, and stamps `confirmed_at`, only when it creates a source; for an existing source it reports a differing address in `corpus.yaml` and changes nothing. A person changes it with `flags.py set-address` (or by approving a candidate), which confirms the source.** A routine load would have undone an approval's address and recorded a confirmation nobody made (whole-branch review).
+  Evidence: real-database tests: an existing source keeps its address and confirmation, a routine save never confirms or resolves an overdue flag, `set_watch_address` confirms and resolves it; loader and script tests; 482 tests pass with the database tests.
 
 ## 2026-11-21
 

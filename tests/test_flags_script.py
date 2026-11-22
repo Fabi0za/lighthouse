@@ -104,3 +104,10 @@ def test_discard_and_resolve(capsys):
     db.discard_version.assert_called_once_with("v9", resolved_by="person")
     db.resolve_check.assert_called_once_with(14)
 
+
+def test_set_address(capsys):
+    db = MagicMock()
+    run(["set-address", "bkw-vorgaben-niederspannung", "https://example.org/v1.4.pdf"], db)
+    db.set_watch_address.assert_called_once_with("bkw-vorgaben-niederspannung", "https://example.org/v1.4.pdf")
+    assert "watching https://example.org/v1.4.pdf for bkw-vorgaben-niederspannung (confirmed)" in capsys.readouterr().out
+
