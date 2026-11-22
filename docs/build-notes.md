@@ -42,6 +42,8 @@ Working notes for the build. Not for the README.
 ## Known gaps
 
 - **Next: reinstating a retired version (undo).** A content revert (A, then B, then A) is skipped against the retired A, so B stays current with no open flag; undoing a wrong promotion has the same gap. Both need a function that sets a retired version back to held under a candidate flag and rebuilds its chunks from `parsed_output`.
+- The system knows which edition of a source is newer only by load order. An older file listed in `corpus.yaml` after a newer one is already stored is promoted and retires the newer one.
+- `hold_candidate` has no caller yet; it arrives with detection, when a monitor reports a possible successor.
 - **After the cleanup: a scope filter in search**, as its own step with its own measurement. pgvector applies a filter after the HNSW scan, so a filtered search can return fewer than the requested count; it needs iterative scans (pgvector 0.8+) or exact search, and a test that a filtered search still returns the full count.
 - Section structure depends on the parser's block types: a heading the parser types as a page header is lost as a section title, and its text joins the previous section (seen once: "A 10.3 Beispiel Prinzipschema ZEV-vZEV" in vse-wv-ch).
 - Section titles can contain parser markup: `<b>` tags, and words split across a line break ("Rundsteueremp-\nfänger"). Cleaning them changes the chunks, so it needs a raised `CHUNKER_VERSION` and a reload.

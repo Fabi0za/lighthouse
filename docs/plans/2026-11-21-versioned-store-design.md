@@ -14,7 +14,7 @@ The assistant had no defence against a superseded document (see `docs/project-br
 
 - **G1. One current version per source; search sees only current versions.** Makes failures 2 and 3 impossible.
 - **G2. A known successor is never silently ignored.** Once a newer version or candidate is in the store, it is current, or held with an open flag, or failed with a flag.
-- **G3. Retirement is traceable.** Every earlier answer that saw a retired version can be listed, and the version cannot be rewritten or deleted.
+- **G3. Retirement is traceable.** Every earlier answer that saw a retired version can be listed. A version an answer saw cannot be deleted, and what identifies it and its content cannot be rewritten once it is past loading (see `versions_record_immutable`).
 - **G4. Every source carries the date a person last confirmed it**, so "not confirmed for too long" can be flagged. This is the backstop for successors the system never saw.
 
 Failure 1 cannot be made impossible: the store cannot act on a version it never learned about. G2–G4 are the defence.
@@ -69,7 +69,10 @@ Rows of `levels` and `scopes` come from `corpus.yaml`. Rows of the settings tabl
 - `versions_one_current_per_source` is a partial unique index (G1).
 - `unique (source_key, text_sha256)`: one version per content.
 - `versions_status_needs_flag` (trigger and function): held needs an open candidate flag of the same source, and failed needs a check_failed flag (G2).
-- `versions_record_immutable` (trigger and function): fingerprints, `obtained_from` once set, label, page limit and settings never change (G3).
+- `versions_record_immutable` (trigger and function): what it fixes and what it does not (G3).
+  - Fixed: `file_sha256` always; `text_sha256` and `parsed_output` once the version is past loading (a retry may replace them while loading); `obtained_from` once set; `version_label`, `page_limit` and `indexing_settings_key`.
+  - Not covered by any rule: moving a version to another source, rewriting its `title`, setting a retired version back to current by hand, and deleting a retired version no answer saw. Only the functions do these transitions, and the backend is the only writer.
+  - `versions_fingerprinted` requires a fingerprint on held, current and retired versions.
 - `versions_no_mixed_settings` (trigger and function): current versions share one set of indexing settings.
 - `parsed_output` is the parser response without its links into the parser's service.
 

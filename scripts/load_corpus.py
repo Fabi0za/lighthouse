@@ -7,11 +7,15 @@ Versions are identified by fingerprint, not by path (app/ingestion/versions.py):
 a file whose bytes are already stored is skipped, a file with new bytes but the
 same text is dismissed as repackaging, and new content is promoted to current,
 retiring the previous version. Each source's versions are loaded oldest first,
-as listed; after a failure, later versions of that source are not attempted,
-so an older version can never be promoted over a newer one.
+as listed, and the newest is the last one loaded: the store knows which edition is
+newer only by load order. After a failure, later versions of that source are not
+attempted in the same run. A file added to corpus.yaml later is loaded later, so an
+older edition listed after a newer one is already stored becomes current.
 
 Sources are identified by their key. Each run saves every source's level and scopes
-as listed in corpus.yaml and says what changed.
+as listed in corpus.yaml and says what changed. A source's watch address comes from
+corpus.yaml only when the source is created; after that the store keeps it, and a
+differing address in corpus.yaml is reported, not applied.
 
 With --parsed-cache DIR, a file DIR/<pdf sha256>.json is used as the parser output
 instead of calling the parser; the output says which versions came from the cache.

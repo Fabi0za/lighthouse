@@ -45,3 +45,19 @@ def test_no_stale_names_in_readme():
     for stale in ("grid provider", "doc_type", "hierarchy_priority", "match_document_chunks",
                   "Optimization history", "GPT-4o"):
         assert stale not in README, stale
+
+
+def test_loader_does_not_claim_more_than_load_order():
+    loader = (ROOT / "scripts" / "load_corpus.py").read_text(encoding="utf-8")
+    assert "can never be promoted" not in loader
+    assert "newest is the last one loaded" in loader
+
+
+def test_known_gaps_name_load_order_and_hold_candidate():
+    notes = (ROOT / "docs" / "build-notes.md").read_text(encoding="utf-8")
+    assert "only by load order" in notes
+    assert "`hold_candidate` has no caller yet" in notes
+
+
+def test_design_does_not_overclaim_immutability():
+    assert "cannot be rewritten or deleted" not in DESIGN
