@@ -109,12 +109,6 @@ python scripts/load_corpus.py [--dry-run] [--parsed-cache DIR]
 
 # Query the system
 python scripts/test_query.py "Your question here"
-
-# Compare LLM models (all questions, or a subset by ID)
-python scripts/test_models.py [question_id ...]
-
-# Compare rule-based vs Cohere reranking
-python scripts/test_cohere_rerank.py [question_id ...]
 ```
 
 ## Tests
@@ -157,7 +151,7 @@ app/
 │   └── embedder.py        # Cohere embeddings
 ├── retrieval/
 │   ├── query_parser.py    # Grid provider detection
-│   ├── reranker.py        # Cohere neural reranker (+ legacy rule-based)
+│   ├── reranker.py        # Cohere neural reranker
 │   └── search.py          # Vector search (+ hybrid search infrastructure)
 ├── generation/
 │   ├── llm.py             # LLM client (Anthropic/OpenAI)

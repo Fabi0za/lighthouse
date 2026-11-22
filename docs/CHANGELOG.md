@@ -2,6 +2,11 @@
 
 Each entry: what changed and why, then the evidence. Measurements live in [baseline.md](baseline.md).
 
+## 2026-11-22
+
+- **Remove the rule-based reranker and the scripts `test_models.py`, `test_cohere_rerank.py` and `migrate_html_chunks.py`.** Nothing in the pipeline used them, and `test_models.py` read `met` where the judge returns `present`.
+  Evidence: no references remain (`git grep`); 176 tests pass with the database tests.
+
 ## 2026-11-21
 
 - **Declare `cohere` and limit package discovery to `app/` and `eval/`.** The reranker imported an undeclared package, and the editable install broke once `data/` existed.
