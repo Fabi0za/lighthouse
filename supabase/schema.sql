@@ -323,14 +323,22 @@ create index answer_versions_version_idx on answer_versions (version_id);
 -- ---------------------------------------------------------------------------
 -- Evaluation
 -- ---------------------------------------------------------------------------
+-- An eval question. key is how people and eval/questions.yaml name it.
 create table eval_questions (
-    id uuid primary key default gen_random_uuid(),
+    key text primary key check (key ~ '^[a-z0-9]+(-[a-z0-9]+)*$'),
     question text not null,
-    question_type text not null default 'answerable',
-    expected_answer text,
-    required_source_docs jsonb not null default '[]',
-    required_facts jsonb not null default '[]',
-    category text
+    question_type text not null check (question_type in ('answerable', 'unanswerable')),
+    case_type text not null
+        check (case_type in ('standard', 'changed_between_versions', 'not_covered', 'unknown_scope')),
+    expected_answer text
+);
+
+-- The facts a correct answer contains, one per row, judged one by one.
+create table eval_question_facts (
+    question_key text not null references eval_questions(key) on delete cascade,
+    position integer not null check (position > 0),
+    text text not null,
+    primary key (question_key, position)
 );
 
 create table eval_runs (
@@ -717,6 +725,7 @@ alter table chunks enable row level security;
 alter table answers enable row level security;
 alter table answer_versions enable row level security;
 alter table eval_questions enable row level security;
+alter table eval_question_facts enable row level security;
 alter table eval_runs enable row level security;
 
 revoke execute on function begin_load(text, text, text, text, integer, text, text) from public, anon, authenticated;
