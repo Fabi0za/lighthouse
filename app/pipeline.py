@@ -6,7 +6,7 @@ from typing import Any
 from app.generation.formatter import ResponseFormatter
 from app.generation.llm import LLMClient
 from app.generation.prompts import build_system_prompt, build_user_prompt
-from app.logging.query_logger import QueryLogger
+from app.answers.logger import AnswerLogger
 from app.retrieval.query_parser import QueryParser
 from app.retrieval.reranker import CohereReranker
 from app.retrieval.search import VectorSearch
@@ -20,7 +20,7 @@ class QueryPipeline:
         reranker: CohereReranker,
         llm: LLMClient,
         formatter: ResponseFormatter,
-        logger: QueryLogger,
+        logger: AnswerLogger,
     ):
         self.query_parser = query_parser
         self.vector_search = vector_search
@@ -52,7 +52,7 @@ class QueryPipeline:
 
         # 6. Log full trace
         latency_ms = int((time.monotonic() - start) * 1000)
-        log_id = self.logger.log(
+        answer_id = self.logger.log(
             question=question,
             detected_filters=detected_filters,
             retrieved_chunks=retrieved_chunks,
@@ -62,14 +62,14 @@ class QueryPipeline:
             formatted_answer=formatted,
             model_used=self.llm.model,
             latency_ms=latency_ms,
-            document_ids=list(dict.fromkeys(c["document_id"] for c in reranked_chunks)),
+            version_ids=list(dict.fromkeys(c["version_id"] for c in reranked_chunks)),
         )
 
         return {
             "answer": formatted["answer"],
             "sources": formatted["sources"],
             "confidence": formatted["confidence"],
-            "log_id": str(log_id),
+            "answer_id": str(answer_id),
             "retrieved_chunks": retrieved_chunks,
             "reranked_chunks": reranked_chunks,
         }

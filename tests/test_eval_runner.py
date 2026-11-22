@@ -35,11 +35,11 @@ def mock_deps():
     pipeline = AsyncMock()
     pipeline.run.return_value = {
         "answer": "Wire X to terminal Y [Manual, Wiring, Page 5].",
-        "sources": [{"document_title": "Manual", "section": "Wiring", "page": 5}],
+        "sources": [{"version_title": "Manual", "section": "Wiring", "page": 5}],
         "confidence": "high",
-        "log_id": str(uuid.uuid4()),
-        "retrieved_chunks": [{"document_id": str(uuid.uuid4()), "content": "chunk"}],
-        "reranked_chunks": [{"document_id": str(uuid.uuid4()), "content": "chunk"}],
+        "answer_id": str(uuid.uuid4()),
+        "retrieved_chunks": [{"version_id": str(uuid.uuid4()), "content": "chunk"}],
+        "reranked_chunks": [{"version_id": str(uuid.uuid4()), "content": "chunk"}],
     }
 
     return {"db": db, "pipeline": pipeline}
@@ -70,10 +70,10 @@ async def test_eval_runner_computes_retrieval_recall(mock_deps):
     doc_id = mock_deps["db"].get_eval_questions.return_value[0]["required_source_docs"][0]
     # Make pipeline return chunks that include the required doc
     mock_deps["pipeline"].run.return_value["retrieved_chunks"] = [
-        {"document_id": doc_id, "content": "relevant chunk"},
+        {"version_id": doc_id, "content": "relevant chunk"},
     ]
     mock_deps["pipeline"].run.return_value["reranked_chunks"] = [
-        {"document_id": doc_id, "content": "relevant chunk"},
+        {"version_id": doc_id, "content": "relevant chunk"},
     ]
 
     runner = EvalRunner(db=mock_deps["db"], pipeline=mock_deps["pipeline"], config_snapshot={})
@@ -86,10 +86,10 @@ async def test_eval_runner_computes_retrieval_recall(mock_deps):
 @pytest.mark.asyncio
 async def test_eval_runner_retrieval_recall_zero_when_wrong_docs(mock_deps):
     mock_deps["pipeline"].run.return_value["retrieved_chunks"] = [
-        {"document_id": "wrong-doc-id", "content": "irrelevant chunk"},
+        {"version_id": "wrong-doc-id", "content": "irrelevant chunk"},
     ]
     mock_deps["pipeline"].run.return_value["reranked_chunks"] = [
-        {"document_id": "wrong-doc-id", "content": "irrelevant chunk"},
+        {"version_id": "wrong-doc-id", "content": "irrelevant chunk"},
     ]
 
     runner = EvalRunner(db=mock_deps["db"], pipeline=mock_deps["pipeline"], config_snapshot={})

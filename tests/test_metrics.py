@@ -9,9 +9,9 @@ from eval.metrics import (
 def test_retrieval_recall_perfect():
     required_doc_ids = [str(uuid.uuid4()), str(uuid.uuid4())]
     retrieved_chunks = [
-        {"document_id": required_doc_ids[0]},
-        {"document_id": required_doc_ids[1]},
-        {"document_id": str(uuid.uuid4())},
+        {"version_id": required_doc_ids[0]},
+        {"version_id": required_doc_ids[1]},
+        {"version_id": str(uuid.uuid4())},
     ]
     score = retrieval_recall(required_doc_ids, retrieved_chunks)
     assert score == 1.0
@@ -20,13 +20,13 @@ def test_retrieval_recall_perfect():
 def test_retrieval_recall_partial():
     doc_a = str(uuid.uuid4())
     doc_b = str(uuid.uuid4())
-    retrieved_chunks = [{"document_id": doc_a}]
+    retrieved_chunks = [{"version_id": doc_a}]
     score = retrieval_recall([doc_a, doc_b], retrieved_chunks)
     assert score == 0.5
 
 
 def test_retrieval_recall_none():
-    score = retrieval_recall([str(uuid.uuid4())], [{"document_id": str(uuid.uuid4())}])
+    score = retrieval_recall([str(uuid.uuid4())], [{"version_id": str(uuid.uuid4())}])
     assert score == 0.0
 
 

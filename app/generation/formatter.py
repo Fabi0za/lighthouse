@@ -34,14 +34,14 @@ class ResponseFormatter:
         sources = []
         for chunk in chunks:
             key = (
-                chunk.get("document_title", ""),
+                chunk.get("version_title", ""),
                 chunk.get("section_title", ""),
                 chunk.get("page_number", 0),
             )
             if key not in seen:
                 seen.add(key)
                 sources.append({
-                    "document_title": chunk.get("document_title", "Unknown"),
+                    "version_title": chunk.get("version_title", "Unknown"),
                     "section": chunk.get("section_title", "Unknown"),
                     "page": chunk.get("page_number", 0),
                 })

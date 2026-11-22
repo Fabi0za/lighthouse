@@ -8,8 +8,8 @@ def test_format_response_extracts_sources():
 Confidence: high"""
 
     chunks = [
-        {"document_title": "Manual A", "section_title": "Wiring", "page_number": 5},
-        {"document_title": "Regulations", "section_title": "Standards", "page_number": 2},
+        {"version_title": "Manual A", "section_title": "Wiring", "page_number": 5},
+        {"version_title": "Regulations", "section_title": "Standards", "page_number": 2},
     ]
 
     result = formatter.format(raw_response, chunks)

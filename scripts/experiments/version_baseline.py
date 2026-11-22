@@ -5,7 +5,7 @@ builders, LLM, formatter) so one variable can be changed in between:
 
   current -- the normal pipeline: only current versions are searchable, so V1.3
              (V1.2 is retired). Each answer is logged through log_answer, which
-             records the versions of its top-8 in query_log_documents.
+             records the versions of its top-8 in answer_versions.
   stale   -- as if the store held only V1.2: V1.2's chunks no longer exist, so they
              are rebuilt in memory from its retained parsed_output (same chunker
              settings and title as the loader), embedded, and scored against the
@@ -34,7 +34,7 @@ from app.generation.prompts import build_system_prompt, build_user_prompt
 from app.ingestion.chunker import Chunker
 from app.ingestion.embedder import Embedder
 from app.ingestion.parser import ReductoParser
-from app.logging.query_logger import QueryLogger
+from app.answers.logger import AnswerLogger
 from app.models.database import DatabaseClient
 from app.retrieval.query_parser import QueryParser
 from app.retrieval.reranker import CohereReranker
@@ -58,13 +58,13 @@ def scratch_chunks(chunks, embeddings, query_embedding, version: dict, source_fi
     return [
         {
             "id": f"scratch-{version['id']}-{c.chunk_index}",
-            "document_id": version["id"],
+            "version_id": version["id"],
             "content": c.content,
             "section_title": c.section_title,
             "page_number": c.page_number,
             "chunk_index": c.chunk_index,
             "token_count": c.token_count,
-            "document_title": version["title"],
+            "version_title": version["title"],
             "similarity": cosine(e, query_embedding),
             **source_fields,
         }
@@ -72,10 +72,10 @@ def scratch_chunks(chunks, embeddings, query_embedding, version: dict, source_fi
     ]
 
 
-def stale_candidates(live: list[dict], scratch: list[dict], drop_document_id: str, k: int) -> list[dict]:
+def stale_candidates(live: list[dict], scratch: list[dict], drop_version_id: str, k: int) -> list[dict]:
     """Top-k by similarity of live plus scratch chunks, then without the dropped version."""
     union = sorted(live + scratch, key=lambda c: c["similarity"], reverse=True)[:k]
-    return [c for c in union if c["document_id"] != drop_document_id]
+    return [c for c in union if c["version_id"] != drop_version_id]
 
 
 async def main():
@@ -87,7 +87,7 @@ async def main():
 
     s = get_settings()
     db = DatabaseClient()
-    docs = {d["file_path"]: d for d in db.list_documents()}
+    docs = {d["file_path"]: d for d in db.list_versions()}
     v12, v13 = docs[V12_PATH], docs[V13_PATH]
     label = {v12["id"]: "V1.2", v13["id"]: "V1.3"}
 
@@ -96,7 +96,7 @@ async def main():
     query_parser = QueryParser(known_scopes=db.get_known_scopes())
     reranker = CohereReranker(api_key=s.cohere_api_key, top_n=s.rerank_top_n)
     formatter = ResponseFormatter()
-    logger = QueryLogger(db=db)
+    logger = AnswerLogger(db=db)
 
     results = {"mode": args.mode, "model": s.llm_model,
                "statuses": {"V1.2": v12["status"], "V1.3": v13["status"]}, "runs": []}
@@ -136,10 +136,10 @@ async def main():
                 run = {
                     "question_id": qid, "run": i, "question": question,
                     "detected_scope": parsed.detected_scope,
-                    "retrieved_counts": {v: sum(1 for c in retrieved if label.get(c["document_id"], "other") == v)
+                    "retrieved_counts": {v: sum(1 for c in retrieved if label.get(c["version_id"], "other") == v)
                                          for v in ("V1.2", "V1.3", "other")},
                     "reranked": [
-                        {"version": label.get(c["document_id"], "other"), "document": c["document_title"],
+                        {"version": label.get(c["version_id"], "other"), "document": c["version_title"],
                          "section": c["section_title"], "page": c["page_number"],
                          "score": round(c["rerank_score"], 3)}
                         for c in reranked
@@ -148,17 +148,17 @@ async def main():
                     "citations": re.findall(r"\[([^\[\]]+?)\]", answer),
                 }
                 if args.mode == "current":
-                    document_ids = list(dict.fromkeys(c["document_id"] for c in reranked))
-                    log_id = logger.log(
+                    version_ids = list(dict.fromkeys(c["version_id"] for c in reranked))
+                    answer_id = logger.log(
                         question=question, detected_filters=parsed.to_filters(),
                         retrieved_chunks=retrieved, reranked_chunks=reranked, llm_prompt=user_prompt,
                         llm_response=answer, formatted_answer=formatted, model_used=llm.model,
-                        latency_ms=int((time.monotonic() - start) * 1000), document_ids=document_ids,
+                        latency_ms=int((time.monotonic() - start) * 1000), version_ids=version_ids,
                     )
-                    logged = db.client.table("query_log_documents").select("document_id") \
-                        .eq("query_log_id", str(log_id)).execute().data
-                    run["log_id"] = str(log_id)
-                    run["versions_logged"] = sorted(label.get(r["document_id"], "other") for r in logged)
+                    logged = db.client.table("answer_versions").select("version_id") \
+                        .eq("answer_id", str(answer_id)).execute().data
+                    run["answer_id"] = str(answer_id)
+                    run["versions_logged"] = sorted(label.get(r["version_id"], "other") for r in logged)
                 results["runs"].append(run)
                 print(f"{args.mode} {qid} run {i}: done", flush=True)
     finally:

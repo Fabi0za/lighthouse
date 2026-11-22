@@ -25,7 +25,7 @@ def retrieval_recall(
 ) -> float:
     if not required_doc_ids:
         return 1.0
-    retrieved_ids = {chunk.get("document_id") for chunk in retrieved_chunks}
+    retrieved_ids = {chunk.get("version_id") for chunk in retrieved_chunks}
     found = sum(1 for doc_id in required_doc_ids if doc_id in retrieved_ids)
     return found / len(required_doc_ids)
 

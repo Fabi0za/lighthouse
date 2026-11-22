@@ -2,7 +2,7 @@ from app.config import get_settings
 from app.generation.formatter import ResponseFormatter
 from app.generation.llm import LLMClient
 from app.ingestion.embedder import Embedder
-from app.logging.query_logger import QueryLogger
+from app.answers.logger import AnswerLogger
 from app.models.database import DatabaseClient
 from app.pipeline import QueryPipeline
 from app.retrieval.query_parser import QueryParser
@@ -28,7 +28,7 @@ def build_dependencies():
     vector_search = VectorSearch(db=db, embedder=embedder, top_k=settings.retrieval_top_k)
     reranker = CohereReranker(api_key=settings.cohere_api_key, top_n=settings.rerank_top_n)
     formatter = ResponseFormatter()
-    logger = QueryLogger(db=db)
+    logger = AnswerLogger(db=db)
 
     pipeline = QueryPipeline(
         query_parser=query_parser,

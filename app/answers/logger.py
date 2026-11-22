@@ -6,7 +6,7 @@ from typing import Any
 from app.models.database import DatabaseClient
 
 
-class QueryLogger:
+class AnswerLogger:
     def __init__(self, db: DatabaseClient):
         self.db = db
 
@@ -21,7 +21,7 @@ class QueryLogger:
         formatted_answer: dict[str, Any],
         model_used: str,
         latency_ms: int,
-        document_ids: list[str],
+        version_ids: list[str],
     ) -> uuid.UUID:
         """Store the answer and the versions its top chunks came from, in one transaction."""
         log_data = {
@@ -35,4 +35,4 @@ class QueryLogger:
             "model_used": model_used,
             "latency_ms": latency_ms,
         }
-        return uuid.UUID(str(self.db.log_answer(log_data, document_ids)))
+        return uuid.UUID(str(self.db.log_answer(log_data, version_ids)))

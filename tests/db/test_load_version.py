@@ -37,33 +37,33 @@ class PgDb:
         return row
 
     def list_versions(self, source_id):
-        return self.c.execute("select * from documents where source_id = %s", (source_id,)).fetchall()
+        return self.c.execute("select * from versions where source_id = %s", (source_id,)).fetchall()
 
-    def get_document(self, doc_id):
-        return self.c.execute("select * from documents where id = %s", (doc_id,)).fetchone()
+    def get_version(self, doc_id):
+        return self.c.execute("select * from versions where id = %s", (doc_id,)).fetchone()
 
     def hold_version(self, source_id, title, address, file_path, file_sha256, kind="new_version"):
         flag = self._one("insert into flags (source_id, kind) values (%s, %s) returning id", (source_id, kind))
         return self._one(
-            "insert into documents (source_id, status, flag_id, title, address, file_path, file_sha256) "
+            "insert into versions (source_id, status, flag_id, title, address, file_path, file_sha256) "
             "values (%s, 'pending', %s, %s, %s, %s, %s) returning *",
             (source_id, flag["id"], title, address, file_path, file_sha256))
 
-    def update_document(self, doc_id, updates):
+    def update_version(self, doc_id, updates):
         (k, v), = updates.items()
-        self._one(f"update documents set {k} = %s where id = %s returning id", (v, doc_id))
+        self._one(f"update versions set {k} = %s where id = %s returning id", (v, doc_id))
 
     def set_text_fingerprint(self, doc_id, text_sha256, parsed_output):
-        self._one("update documents set text_sha256 = %s, parsed_output = %s where id = %s returning id",
+        self._one("update versions set text_sha256 = %s, parsed_output = %s where id = %s returning id",
                   (text_sha256, json.dumps(parsed_output), doc_id))
 
 
     def insert_chunks(self, chunks):
         for ch in chunks:
             self.c.execute(
-                "insert into document_chunks (document_id, content, section_title, page_number, chunk_index, "
+                "insert into chunks (version_id, content, section_title, page_number, chunk_index, "
                 "embedding, token_count) values (%s, %s, %s, %s, %s, %s::vector, %s)",
-                (ch["document_id"], ch["content"], ch["section_title"], ch["page_number"],
+                (ch["version_id"], ch["content"], ch["section_title"], ch["page_number"],
                  ch["chunk_index"], str(ch["embedding"]), ch["token_count"]))
         self.c.commit()
 
@@ -72,10 +72,10 @@ class PgDb:
         self.c.commit()
 
     def delete_pending_version(self, doc_id, resolution):
-        doc = self.get_document(doc_id)
+        doc = self.get_version(doc_id)
         assert doc and doc["status"] == "pending"
-        self.c.execute("delete from document_chunks where document_id = %s", (doc_id,))
-        self.c.execute("delete from documents where id = %s", (doc_id,))
+        self.c.execute("delete from chunks where version_id = %s", (doc_id,))
+        self.c.execute("delete from versions where id = %s", (doc_id,))
         self.c.execute("update flags set resolved_at = %s, resolution = %s where id = %s",
                        (datetime.now(UTC), resolution, doc["flag_id"]))
         self.c.commit()
@@ -102,7 +102,7 @@ def _deps(fail_embedding: bool):
 
 
 def _state(conn, source_id):
-    docs = conn.execute("select status, ingestion_status from documents where source_id = %s",
+    docs = conn.execute("select status, ingestion_status from versions where source_id = %s",
                         (source_id,)).fetchall()
     open_flags = conn.execute("select count(*) as n from flags where source_id = %s and resolved_at is null",
                               (source_id,)).fetchone()["n"]

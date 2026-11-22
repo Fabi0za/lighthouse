@@ -25,14 +25,14 @@ def db(mock_supabase):
 
 
 def test_list_documents(db, mock_supabase):
-    result = db.list_documents()
-    mock_supabase.table.assert_called_with("documents")
+    result = db.list_versions()
+    mock_supabase.table.assert_called_with("versions")
     assert len(result) == 1
 
 
 def test_insert_chunks(db, mock_supabase):
     chunks = [{
-        "document_id": str(uuid.uuid4()),
+        "version_id": str(uuid.uuid4()),
         "content": "test content",
         "section_title": "Section 1",
         "page_number": 1,
@@ -41,7 +41,7 @@ def test_insert_chunks(db, mock_supabase):
         "token_count": 50,
     }]
     db.insert_chunks(chunks)
-    mock_supabase.table.assert_called_with("document_chunks")
+    mock_supabase.table.assert_called_with("chunks")
 
 
 def test_hold_version_inserts_flag_before_pending_document(db, mock_supabase):
@@ -55,7 +55,7 @@ def test_hold_version_inserts_flag_before_pending_document(db, mock_supabase):
     doc = db.hold_version(source_id, "Doc V2", "https://example.org/v2.pdf", "data/v2.pdf", "abc")
 
     tables = [c.args[0] for c in mock_supabase.table.call_args_list]
-    assert tables == ["flags", "documents"]
+    assert tables == ["flags", "versions"]
     flag_row = mock_supabase.insert.call_args_list[0].args[0]
     assert flag_row == {"source_id": source_id, "kind": "new_version"}
     doc_row = mock_supabase.insert.call_args_list[1].args[0]
@@ -76,7 +76,7 @@ def test_promote_version_calls_rpc(db, mock_supabase):
     doc_id = uuid.uuid4()
     db.promote_version(doc_id, "promoted (auto)")
     mock_supabase.rpc.assert_called_once_with(
-        "promote_version", {"p_document_id": str(doc_id), "p_resolution": "promoted (auto)"}
+        "promote_version", {"p_version_id": str(doc_id), "p_resolution": "promoted (auto)"}
     )
 
 
@@ -84,18 +84,18 @@ def test_reject_version_calls_rpc(db, mock_supabase):
     doc_id = uuid.uuid4()
     db.reject_version(doc_id, "rejected")
     mock_supabase.rpc.assert_called_once_with(
-        "reject_version", {"p_document_id": str(doc_id), "p_resolution": "rejected"}
+        "reject_version", {"p_version_id": str(doc_id), "p_resolution": "rejected"}
     )
 
 
 def test_log_answer_calls_rpc_and_returns_id(db, mock_supabase):
-    log_id = str(uuid.uuid4())
-    mock_supabase.rpc.return_value.execute.return_value = MagicMock(data=log_id)
+    answer_id = str(uuid.uuid4())
+    mock_supabase.rpc.return_value.execute.return_value = MagicMock(data=answer_id)
     result = db.log_answer({"question": "q"}, ["d1", "d2"])
     mock_supabase.rpc.assert_called_once_with(
-        "log_answer", {"p_log": {"question": "q"}, "p_document_ids": ["d1", "d2"]}
+        "log_answer", {"p_answer": {"question": "q"}, "p_version_ids": ["d1", "d2"]}
     )
-    assert result == log_id
+    assert result == answer_id
 
 
 def test_find_source_returns_none_when_missing(db, mock_supabase):
@@ -137,7 +137,7 @@ def test_delete_pending_version_deletes_then_resolves_flag(db, mock_supabase):
     mock_supabase.execute.return_value = MagicMock(data=[{"id": "d", "status": "pending", "flag_id": "f"}])
     db.delete_pending_version("d", "dismissed (same text)")
     tables = [c.args[0] for c in mock_supabase.table.call_args_list]
-    assert tables == ["documents", "document_chunks", "documents", "flags"]
+    assert tables == ["versions", "chunks", "versions", "flags"]
     update = mock_supabase.update.call_args.args[0]
     assert update["resolution"] == "dismissed (same text)"
     assert "resolved_at" in update

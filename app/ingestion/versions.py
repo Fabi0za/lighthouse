@@ -47,7 +47,7 @@ async def load_version(
     stored_path: str | None = None,
     parsed_cache: Path | None = None,
 ) -> tuple[str, str]:
-    """Load file as a version of source. Returns (action, document_id).
+    """Load file as a version of source. Returns (action, version_id).
 
     action is "skipped" (these bytes are already a version), "dismissed" (new bytes,
     same text: repackaging) or "promoted" (new content, now current).
@@ -72,7 +72,7 @@ async def load_version(
     doc = db.hold_version(source_id, title, address, stored_path or str(file), file_hash)
     doc_id = doc["id"]
     try:
-        db.update_document(doc_id, {"ingestion_status": "processing"})
+        db.update_version(doc_id, {"ingestion_status": "processing"})
         cached = cached_output(parsed_cache, file_hash)
         if cached:
             raw_output = json.loads(cached.read_text(encoding="utf-8"))
@@ -100,7 +100,7 @@ async def load_version(
         embeddings = await embedder.embed_texts([c.content for c in chunks])
         db.insert_chunks([
             {
-                "document_id": doc_id,
+                "version_id": doc_id,
                 "content": c.content,
                 "section_title": c.section_title,
                 "page_number": c.page_number,
@@ -110,9 +110,9 @@ async def load_version(
             }
             for i, c in enumerate(chunks)
         ])
-        db.update_document(doc_id, {"ingestion_status": "completed"})
+        db.update_version(doc_id, {"ingestion_status": "completed"})
     except Exception:
-        db.update_document(doc_id, {"ingestion_status": "failed"})
+        db.update_version(doc_id, {"ingestion_status": "failed"})
         raise
 
     db.promote_version(doc_id, "promoted (auto)")

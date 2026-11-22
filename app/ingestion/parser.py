@@ -137,7 +137,7 @@ class ReductoParser:
         parse_response.raise_for_status()
         raw_output = parse_response.json()
 
-        # Handle URL result (large documents)
+        # Handle URL result (large files)
         result = raw_output.get("result", {})
         if result.get("type") == "url":
             result_url = result["url"]

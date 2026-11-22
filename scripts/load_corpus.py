@@ -217,7 +217,7 @@ async def main() -> int:
 
     db = DatabaseClient()
     if args.dry_run:
-        known = {d["file_sha256"] for d in db.list_documents() if d.get("status") != "pending"}
+        known = {d["file_sha256"] for d in db.list_versions() if d.get("status") != "pending"}
         for s, v, action in plan(sources, known, repo_root, parsed_cache=args.parsed_cache):
             pages = f", first {v.max_pages} pages" if v.max_pages else ""
             print(f"{action:5}  {v.path}  [{s.level}/{','.join(s.scopes) or '-'}{pages}]")

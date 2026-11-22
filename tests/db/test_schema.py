@@ -3,14 +3,14 @@ from __future__ import annotations
 
 import pytest
 
-from tests.db.conftest import make_document, make_flag, make_source
+from tests.db.conftest import make_version, make_flag, make_source
 
 psycopg = pytest.importorskip("psycopg")
 from psycopg import errors
 
 TABLES = {
-    "sources", "source_scopes", "documents", "document_chunks", "flags",
-    "query_logs", "query_log_documents", "eval_questions", "eval_runs",
+    "sources", "source_scopes", "versions", "chunks", "flags",
+    "answers", "answer_versions", "eval_questions", "eval_runs",
 }
 
 
@@ -20,34 +20,35 @@ def test_schema_applies(pg):
     ).fetchall()
     names = {r[0] for r in rows}
     assert TABLES <= names
-    assert "hierarchy_rules" not in names
+    assert not names & {"hierarchy_rules", "documents", "document_chunks", "query_logs",
+                        "query_log_documents"}
 
 
 def test_second_current_rejected(pg):
     s = make_source(pg)
-    make_document(pg, s, status="current")
+    make_version(pg, s, status="current")
     with pytest.raises(errors.UniqueViolation):
-        make_document(pg, s, status="current")
+        make_version(pg, s, status="current")
 
 
 def test_same_text_twice_rejected(pg):
     s = make_source(pg)
-    make_document(pg, s, text_sha256="t1")
+    make_version(pg, s, text_sha256="t1")
     with pytest.raises(errors.UniqueViolation):
-        make_document(pg, s, text_sha256="t1")
+        make_version(pg, s, text_sha256="t1")
 
 
 def test_current_requires_completed(pg):
     s = make_source(pg)
     with pytest.raises(errors.CheckViolation):
-        make_document(pg, s, status="current", ingestion_status="pending")
+        make_version(pg, s, status="current", ingestion_status="pending")
 
 
 def test_pending_requires_flag(pg):
     s = make_source(pg)
     with pytest.raises(errors.CheckViolation):
         pg.execute(
-            "insert into documents (source_id, status, title, file_sha256) "
+            "insert into versions (source_id, status, title, file_sha256) "
             "values (%s, 'pending', 'Doc', 'f')",
             (s,),
         )
@@ -56,32 +57,32 @@ def test_pending_requires_flag(pg):
 def test_retired_requires_date(pg):
     s = make_source(pg)
     with pytest.raises(errors.CheckViolation):
-        make_document(pg, s, status="retired")
+        make_version(pg, s, status="retired")
 
 
 def test_current_rejects_retired_date(pg):
     s = make_source(pg)
     with pytest.raises(errors.CheckViolation):
-        make_document(pg, s, status="current", retired_at="2026-01-01")
+        make_version(pg, s, status="current", retired_at="2026-01-01")
 
 
 def test_file_fingerprint_immutable(pg):
-    d = make_document(pg, make_source(pg))
+    d = make_version(pg, make_source(pg))
     with pytest.raises(errors.CheckViolation):
-        pg.execute("update documents set file_sha256 = 'other' where id = %s", (d,))
+        pg.execute("update versions set file_sha256 = 'other' where id = %s", (d,))
 
 
 def test_text_fingerprint_set_once(pg):
-    d = make_document(pg, make_source(pg))
-    pg.execute("update documents set text_sha256 = 't1' where id = %s", (d,))
+    d = make_version(pg, make_source(pg))
+    pg.execute("update versions set text_sha256 = 't1' where id = %s", (d,))
     with pytest.raises(errors.CheckViolation):
-        pg.execute("update documents set text_sha256 = 't2' where id = %s", (d,))
+        pg.execute("update versions set text_sha256 = 't2' where id = %s", (d,))
 
 
 def test_flag_not_resolvable_while_pending(pg):
     s = make_source(pg)
     f = make_flag(pg, s)
-    make_document(pg, s, flag_id=f)
+    make_version(pg, s, flag_id=f)
     with pytest.raises(errors.CheckViolation):
         pg.execute("update flags set resolved_at = now() where id = %s", (f,))
 
@@ -92,14 +93,14 @@ def test_flag_resolvable_without_pending_document(pg):
 
 
 def test_used_version_not_deletable(pg):
-    d = make_document(pg, make_source(pg), status="current")
+    d = make_version(pg, make_source(pg), status="current")
     log = pg.execute(
-        "insert into query_logs (question, llm_prompt, llm_response, model_used, latency_ms) "
+        "insert into answers (question, llm_prompt, llm_response, model_used, latency_ms) "
         "values ('q', 'p', 'r', 'm', 1) returning id"
     ).fetchone()[0]
-    pg.execute("insert into query_log_documents (query_log_id, document_id) values (%s, %s)", (log, d))
+    pg.execute("insert into answer_versions (answer_id, version_id) values (%s, %s)", (log, d))
     with pytest.raises(errors.RestrictViolation):
-        pg.execute("delete from documents where id = %s", (d,))
+        pg.execute("delete from versions where id = %s", (d,))
 
 
 def test_scopes_many_per_source(pg):
@@ -118,29 +119,29 @@ def _resolved_flag(conn, source_id):
 def test_pending_rejects_resolved_flag(pg):
     s = make_source(pg)
     with pytest.raises(errors.CheckViolation):
-        make_document(pg, s, flag_id=_resolved_flag(pg, s))
+        make_version(pg, s, flag_id=_resolved_flag(pg, s))
 
 
 def test_pending_rejects_other_sources_flag(pg):
     s, other = make_source(pg, title="A"), make_source(pg, title="B")
     with pytest.raises(errors.CheckViolation):
-        make_document(pg, s, flag_id=make_flag(pg, other))
+        make_version(pg, s, flag_id=make_flag(pg, other))
 
 
 def test_reinstating_to_pending_needs_an_open_flag(pg):
     s = make_source(pg)
-    d = make_document(pg, s, status="retired", retired_at="2026-01-01", text_sha256="t1")
+    d = make_version(pg, s, status="retired", retired_at="2026-01-01", text_sha256="t1")
     with pytest.raises(errors.CheckViolation):
         pg.execute(
-            "update documents set status = 'pending', retired_at = null, flag_id = %s where id = %s",
+            "update versions set status = 'pending', retired_at = null, flag_id = %s where id = %s",
             (_resolved_flag(pg, s), d),
         )
 
 
 def test_reinstating_to_pending_with_open_flag_succeeds(pg):
     s = make_source(pg)
-    d = make_document(pg, s, status="retired", retired_at="2026-01-01", text_sha256="t1")
+    d = make_version(pg, s, status="retired", retired_at="2026-01-01", text_sha256="t1")
     pg.execute(
-        "update documents set status = 'pending', retired_at = null, flag_id = %s where id = %s",
+        "update versions set status = 'pending', retired_at = null, flag_id = %s where id = %s",
         (make_flag(pg, s), d),
     )

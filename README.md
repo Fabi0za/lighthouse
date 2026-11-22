@@ -87,8 +87,8 @@ The API will be available at `http://localhost:8000`.
 | Method | Path | Description |
 |--------|------|-------------|
 | `POST` | `/query` | Ask a question, get a cited answer |
-| `GET` | `/query/{log_id}` | Retrieve full query trace |
-| `GET` | `/documents` | List all documents |
+| `GET` | `/answers/{answer_id}` | Retrieve an answer's full trace |
+| `GET` | `/versions` | List all versions |
 | `POST` | `/eval/run` | Run evaluation suite |
 | `GET` | `/eval/runs` | List evaluation runs |
 
@@ -154,13 +154,13 @@ app/
 │   ├── llm.py             # Answer model client (Anthropic)
 │   ├── prompts.py         # Prompt templates
 │   └── formatter.py       # Response formatting
-└── logging/
-    └── query_logger.py    # Full query trace logging
+└── answers/
+    └── logger.py          # Stores each answer with the versions it saw
 eval/
 ├── metrics.py             # Retrieval recall, refusal accuracy, LLM-as-judge correctness
 └── runner.py              # Eval runner
 supabase/
-└── schema.sql             # Database schema, HNSW index, vector + keyword search functions
+└── schema.sql             # Database schema, HNSW index, vector search function
 ```
 
 ## Optimization history

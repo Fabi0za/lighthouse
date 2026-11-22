@@ -26,8 +26,8 @@ async def main():
     print(f"Confidence: {result['confidence']}")
     print("Sources:")
     for s in result["sources"]:
-        print(f"  - {s['document_title']}, {s['section']}, Page {s['page']}")
-    print(f"\nLog ID: {result['log_id']}")
+        print(f"  - {s['version_title']}, {s['section']}, Page {s['page']}")
+    print(f"\nLog ID: {result['answer_id']}")
 
     await pipeline.vector_search.embedder.close()
     await pipeline.llm.close()

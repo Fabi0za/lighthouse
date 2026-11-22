@@ -69,21 +69,20 @@ class DatabaseClient:
 
     # --- versions -----------------------------------------------------------
 
-    def list_documents(self) -> list[dict[str, Any]]:
-        return self.client.table("documents").select("*").execute().data
+    def list_versions(self, source_id: str | None = None) -> list[dict[str, Any]]:
+        """All versions, or those of one source."""
+        query = self.client.table("versions").select("*")
+        if source_id is not None:
+            query = query.eq("source_id", str(source_id))
+        return query.execute().data
 
-    def list_versions(self, source_id: str) -> list[dict[str, Any]]:
-        return (
-            self.client.table("documents").select("*").eq("source_id", str(source_id)).execute().data
-        )
-
-    def get_document(self, doc_id: uuid.UUID) -> dict[str, Any] | None:
-        result = self.client.table("documents").select("*").eq("id", str(doc_id)).execute()
+    def get_version(self, doc_id: uuid.UUID) -> dict[str, Any] | None:
+        result = self.client.table("versions").select("*").eq("id", str(doc_id)).execute()
         return result.data[0] if result.data else None
 
-    def update_document(self, doc_id: uuid.UUID, updates: dict[str, Any]) -> dict[str, Any]:
+    def update_version(self, doc_id: uuid.UUID, updates: dict[str, Any]) -> dict[str, Any]:
         return (
-            self.client.table("documents")
+            self.client.table("versions")
             .update(updates)
             .eq("id", str(doc_id))
             .execute()
@@ -103,7 +102,7 @@ class DatabaseClient:
         flag = self.client.table("flags").insert(
             {"source_id": str(source_id), "kind": kind}
         ).execute().data[0]
-        return self.client.table("documents").insert({
+        return self.client.table("versions").insert({
             "source_id": str(source_id),
             "status": "pending",
             "flag_id": flag["id"],
@@ -115,27 +114,27 @@ class DatabaseClient:
         }).execute().data[0]
 
     def set_text_fingerprint(self, doc_id: str, text_sha256: str, parsed_output: dict[str, Any]) -> None:
-        self.client.table("documents").update(
+        self.client.table("versions").update(
             {"text_sha256": text_sha256, "parsed_output": parsed_output}
         ).eq("id", str(doc_id)).execute()
 
     def promote_version(self, doc_id: str | uuid.UUID, resolution: str) -> None:
         self.client.rpc(
-            "promote_version", {"p_document_id": str(doc_id), "p_resolution": resolution}
+            "promote_version", {"p_version_id": str(doc_id), "p_resolution": resolution}
         ).execute()
 
     def reject_version(self, doc_id: str | uuid.UUID, resolution: str) -> None:
         self.client.rpc(
-            "reject_version", {"p_document_id": str(doc_id), "p_resolution": resolution}
+            "reject_version", {"p_version_id": str(doc_id), "p_resolution": resolution}
         ).execute()
 
     def delete_pending_version(self, doc_id: str | uuid.UUID, resolution: str) -> None:
         """Remove a pending version that will not be kept (repackaging, interrupted load)."""
-        doc = self.get_document(doc_id)
+        doc = self.get_version(doc_id)
         if doc is None or doc.get("status") != "pending":
             raise ValueError(f"document {doc_id} is not pending")
-        self.client.table("document_chunks").delete().eq("document_id", str(doc_id)).execute()
-        self.client.table("documents").delete().eq("id", str(doc_id)).execute()
+        self.client.table("chunks").delete().eq("version_id", str(doc_id)).execute()
+        self.client.table("versions").delete().eq("id", str(doc_id)).execute()
         self.client.table("flags").update({
             "resolved_at": datetime.now(UTC).isoformat(),
             "resolution": resolution,
@@ -144,24 +143,24 @@ class DatabaseClient:
     # --- chunks and search --------------------------------------------------
 
     def insert_chunks(self, chunks: list[dict[str, Any]]) -> None:
-        self.client.table("document_chunks").insert(chunks).execute()
+        self.client.table("chunks").insert(chunks).execute()
 
     def vector_search(self, query_embedding: list[float], top_k: int = 20) -> list[dict[str, Any]]:
         return self.client.rpc(
-            "match_document_chunks",
+            "match_chunks",
             {"query_embedding": query_embedding, "match_count": top_k},
         ).execute().data
 
     # --- answers ------------------------------------------------------------
 
-    def log_answer(self, log_data: dict[str, Any], document_ids: list[str]) -> str:
-        """Store an answer and the versions it saw, in one transaction. Returns the log id."""
+    def log_answer(self, answer: dict[str, Any], version_ids: list[str]) -> str:
+        """Store an answer and the versions it saw, in one transaction. Returns the answer id."""
         return self.client.rpc(
-            "log_answer", {"p_log": log_data, "p_document_ids": list(document_ids)}
+            "log_answer", {"p_answer": answer, "p_version_ids": list(version_ids)}
         ).execute().data
 
-    def get_query_log(self, log_id: uuid.UUID) -> dict[str, Any] | None:
-        result = self.client.table("query_logs").select("*").eq("id", str(log_id)).execute()
+    def get_answer(self, answer_id: uuid.UUID) -> dict[str, Any] | None:
+        result = self.client.table("answers").select("*").eq("id", str(answer_id)).execute()
         return result.data[0] if result.data else None
 
     # --- evaluation ---------------------------------------------------------

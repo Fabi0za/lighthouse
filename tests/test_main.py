@@ -10,9 +10,9 @@ def mock_pipeline():
     pipeline = AsyncMock()
     pipeline.run.return_value = {
         "answer": "Wire X to terminal Y.",
-        "sources": [{"document_title": "Manual A", "section": "Wiring", "page": 5}],
+        "sources": [{"version_title": "Manual A", "section": "Wiring", "page": 5}],
         "confidence": "high",
-        "log_id": str(uuid.uuid4()),
+        "answer_id": str(uuid.uuid4()),
     }
     return pipeline
 
@@ -20,15 +20,15 @@ def mock_pipeline():
 @pytest.fixture
 def mock_db():
     db = MagicMock()
-    db.list_documents.return_value = [
+    db.list_versions.return_value = [
         {"id": str(uuid.uuid4()), "title": "Test Doc", "source_id": str(uuid.uuid4()),
          "status": "current", "ingestion_status": "completed"}
     ]
-    db.get_document.return_value = {
+    db.get_version.return_value = {
         "id": str(uuid.uuid4()), "title": "Test Doc", "source_id": str(uuid.uuid4()),
         "status": "current", "ingestion_status": "completed"
     }
-    db.get_query_log.return_value = {
+    db.get_answer.return_value = {
         "id": str(uuid.uuid4()), "question": "test?", "detected_filters": {},
         "retrieved_chunks": [], "reranked_chunks": [], "llm_prompt": "p",
         "llm_response": "r", "formatted_answer": {}, "model_used": "test",
@@ -51,18 +51,18 @@ def test_query_endpoint(client, mock_pipeline):
     assert "answer" in data
     assert "sources" in data
     assert "confidence" in data
-    assert "log_id" in data
+    assert "answer_id" in data
 
 
-def test_list_documents(client):
-    response = client.get("/documents")
+def test_list_versions(client):
+    response = client.get("/versions")
     assert response.status_code == 200
     assert len(response.json()) == 1
 
 
-def test_get_query_log(client):
-    log_id = uuid.uuid4()
-    response = client.get(f"/query/{log_id}")
+def test_get_answer(client):
+    answer_id = uuid.uuid4()
+    response = client.get(f"/answers/{answer_id}")
     assert response.status_code == 200
     assert "question" in response.json()
 
@@ -76,6 +76,11 @@ def test_documents_are_read_only(client):
     writes = [
         (route.path, sorted(route.methods & {"POST", "PUT", "PATCH", "DELETE"}))
         for route in client.app.routes
-        if route.path.startswith("/documents") and route.methods & {"POST", "PUT", "PATCH", "DELETE"}
+        if route.path.startswith("/versions") and route.methods & {"POST", "PUT", "PATCH", "DELETE"}
     ]
     assert writes == []
+
+
+def test_old_paths_are_gone(client):
+    assert client.get("/documents").status_code == 404
+    assert client.get(f"/query/{uuid.uuid4()}").status_code == 404

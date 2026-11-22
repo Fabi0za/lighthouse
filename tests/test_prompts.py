@@ -16,7 +16,7 @@ def test_user_prompt_contains_question_and_context():
             "section_title": "Wiring",
             "page_number": 5,
             "level": "operator",
-            "document_title": "Manual A",
+            "version_title": "Manual A",
             "authority_rank": 2,
         },
         {
@@ -24,7 +24,7 @@ def test_user_prompt_contains_question_and_context():
             "section_title": "Standards",
             "page_number": 2,
             "level": "national",
-            "document_title": "Regulations",
+            "version_title": "Regulations",
             "authority_rank": 1,
         },
     ]

@@ -10,6 +10,8 @@ Each entry: what changed and why, then the evidence. Measurements live in [basel
   Evidence: `tests/test_config.py` (each removed key gives exactly one `extra_forbidden` error on that key); 179 tests pass with the database tests.
 - **Remove `PUT /documents/{id}` and `POST /ingest`.** Renaming a version left its old title in every chunk, and an upload was promoted at once, even a candidate from a new address; `scripts/load_corpus.py` is the way to load.
   Evidence: `test_documents_are_read_only` failed with the PUT route present and passes now; `test_ingest_is_gone`; 169 tests pass with the database tests.
+- **Tables, functions and endpoints use the store's words: `versions`, `chunks`, `answers`, `answer_versions`; `GET /versions`, `GET /answers/{id}`; keyword search removed from the schema.** One word per thing in schema, code and docs; keyword search had no caller since the hybrid search went.
+  Evidence: `test_no_old_store_names` listed every old table, column and endpoint name before and none after; 173 tests pass with the database tests.
 
 ## 2026-11-21
 

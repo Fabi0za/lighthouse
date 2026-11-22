@@ -90,7 +90,7 @@ def make_flag(conn, source_id: str, kind: str = "new_version") -> str:
     ).fetchone()[0])
 
 
-def make_document(
+def make_version(
     conn,
     source_id: str,
     status: str = "pending",
@@ -104,7 +104,7 @@ def make_document(
     if status == "pending" and flag_id is None:
         flag_id = make_flag(conn, source_id)
     return str(conn.execute(
-        "insert into documents (source_id, status, flag_id, title, address, file_sha256, "
+        "insert into versions (source_id, status, flag_id, title, address, file_sha256, "
         "text_sha256, ingestion_status, retired_at) "
         "values (%s, %s, %s, 'Doc', %s, %s, %s, %s, %s) returning id",
         (source_id, status, flag_id, address, file_sha256 or uuid.uuid4().hex,

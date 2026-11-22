@@ -55,7 +55,7 @@ async def test_new_file_promoted(tmp_path):
     )
     db.set_text_fingerprint.assert_called_once_with("new-doc", text_sha256(SECTIONS), {"result": {"raw": True}})
     assert chunker.chunk_sections.call_args.kwargs["doc_title"] == "Doc (V2)"
-    db.update_document.assert_called_with("new-doc", {"ingestion_status": "completed"})
+    db.update_version.assert_called_with("new-doc", {"ingestion_status": "completed"})
     db.promote_version.assert_called_once_with("new-doc", "promoted (auto)")
 
 
@@ -114,7 +114,7 @@ async def test_failure_marks_failed_and_keeps_flag(tmp_path):
     with pytest.raises(RuntimeError):
         await load_version(db, SOURCE, f, "Doc", None, parser, chunker, embedder)
 
-    db.update_document.assert_called_with("new-doc", {"ingestion_status": "failed"})
+    db.update_version.assert_called_with("new-doc", {"ingestion_status": "failed"})
     db.promote_version.assert_not_called()
     db.delete_pending_version.assert_not_called()
 
@@ -126,9 +126,9 @@ async def test_chunk_records_have_no_removed_columns(tmp_path):
     await load_version(db, SOURCE, f, "Doc", None, parser, chunker, embedder)
 
     record = db.insert_chunks.call_args.args[0][0]
-    assert set(record) == {"document_id", "content", "section_title", "page_number",
+    assert set(record) == {"version_id", "content", "section_title", "page_number",
                            "chunk_index", "embedding", "token_count"}
-    assert record["document_id"] == "new-doc"
+    assert record["version_id"] == "new-doc"
 
 
 async def test_max_pages_limits_parse_but_not_fingerprint(tmp_path):

@@ -25,20 +25,20 @@ def create_app(
             raise HTTPException(status_code=503, detail="Pipeline not initialized")
         return await pipeline.run(request.question)
 
-    @app.get("/query/{log_id}")
-    def get_query_log(log_id: uuid.UUID) -> dict[str, Any]:
+    @app.get("/answers/{answer_id}")
+    def get_answer(answer_id: uuid.UUID) -> dict[str, Any]:
         if db is None:
             raise HTTPException(status_code=503, detail="Database not initialized")
-        result = db.get_query_log(log_id)
+        result = db.get_answer(answer_id)
         if result is None:
             raise HTTPException(status_code=404, detail="Query log not found")
         return result
 
-    @app.get("/documents")
-    def list_documents() -> list[dict[str, Any]]:
+    @app.get("/versions")
+    def list_versions() -> list[dict[str, Any]]:
         if db is None:
             raise HTTPException(status_code=503, detail="Database not initialized")
-        return db.list_documents()
+        return db.list_versions()
 
     @app.post("/eval/run")
     async def run_eval(request: EvalRunRequest | None = None) -> dict[str, Any]:

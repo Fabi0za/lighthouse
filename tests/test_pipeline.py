@@ -21,9 +21,9 @@ def mock_deps():
             "content": "Wire X to terminal Y.",
             "section_title": "Wiring",
             "page_number": 5,
-            "document_id": "d1",
+            "version_id": "d1",
             "level": "operator",
-            "document_title": "Manual A",
+            "version_title": "Manual A",
             "scopes": ["BKW"],
             "authority_rank": 2,
             "similarity": 0.9,
@@ -36,9 +36,9 @@ def mock_deps():
             "content": "Wire X to terminal Y.",
             "section_title": "Wiring",
             "page_number": 5,
-            "document_id": "d1",
+            "version_id": "d1",
             "level": "operator",
-            "document_title": "Manual A",
+            "version_title": "Manual A",
             "scopes": ["BKW"],
             "authority_rank": 2,
             "similarity": 0.9,
@@ -53,7 +53,7 @@ def mock_deps():
     formatter = MagicMock()
     formatter.format.return_value = {
         "answer": "Wire X to terminal Y [Manual A, Wiring, Page 5].",
-        "sources": [{"document_title": "Manual A", "section": "Wiring", "page": 5}],
+        "sources": [{"version_title": "Manual A", "section": "Wiring", "page": 5}],
         "confidence": "high",
     }
 
@@ -77,7 +77,7 @@ async def test_pipeline_returns_response(mock_deps):
 
     assert result["answer"] == "Wire X to terminal Y [Manual A, Wiring, Page 5]."
     assert result["confidence"] == "high"
-    assert "log_id" in result
+    assert "answer_id" in result
 
 
 @pytest.mark.asyncio
@@ -96,13 +96,13 @@ async def test_pipeline_calls_all_steps(mock_deps):
 @pytest.mark.asyncio
 async def test_pipeline_logs_distinct_versions_of_the_top_chunks(mock_deps):
     mock_deps["reranker"].rerank.return_value = [
-        {"content": "a", "document_id": "d1", "document_title": "A"},
-        {"content": "b", "document_id": "d1", "document_title": "A"},
-        {"content": "c", "document_id": "d2", "document_title": "B"},
+        {"content": "a", "version_id": "d1", "version_title": "A"},
+        {"content": "b", "version_id": "d1", "version_title": "A"},
+        {"content": "c", "version_id": "d2", "version_title": "B"},
     ]
     pipeline = QueryPipeline(**mock_deps)
     await pipeline.run("q")
-    assert mock_deps["logger"].log.call_args.kwargs["document_ids"] == ["d1", "d2"]
+    assert mock_deps["logger"].log.call_args.kwargs["version_ids"] == ["d1", "d2"]
 
 
 @pytest.mark.asyncio

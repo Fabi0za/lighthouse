@@ -26,7 +26,7 @@ No relevant context documents were found. State that you have no relevant contex
 
     context_parts = []
     for i, chunk in enumerate(chunks, 1):
-        title = chunk.get("document_title", "Unknown Document")
+        title = chunk.get("version_title", "Unknown Document")
         section = chunk.get("section_title", "Unknown Section")
         page = chunk.get("page_number", "?")
         priority = chunk.get("authority_rank", 0)

@@ -28,7 +28,7 @@ def app_with_eval():
         "answer": "Yes.",
         "sources": [],
         "confidence": "high",
-        "log_id": str(uuid.uuid4()),
+        "answer_id": str(uuid.uuid4()),
         "retrieved_chunks": [],
         "reranked_chunks": [],
     }

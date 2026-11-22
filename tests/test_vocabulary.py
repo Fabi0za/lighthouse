@@ -33,6 +33,24 @@ def test_no_old_project_words():
     assert hits == []
 
 
+OLD_STORE_NAMES = re.compile(
+    r"""\b(from|into|update|join|references|on|table)\s+documents\b|table\(["']documents["']\)"""
+    r"|document_chunks|query_log|document_id|document_title|\blog_id\b"
+    r"|keyword_search|content_tsv|QueryLogger"
+)
+
+
+def test_no_old_store_names():
+    """The store's words are versions, chunks, answers, answer_versions."""
+    hits = [
+        f"{path.relative_to(ROOT)}:{n}: {line.strip()}"
+        for path in _scanned_files() + [ROOT / "app" / "generation" / "prompts.py"]
+        for n, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1)
+        if OLD_STORE_NAMES.search(line)
+    ]
+    assert hits == []
+
+
 def test_package_name():
     project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]
     assert project["name"] == "lighthouse"

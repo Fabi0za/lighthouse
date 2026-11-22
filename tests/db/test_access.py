@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import pytest
 
-from tests.db.conftest import make_document, make_source
+from tests.db.conftest import make_version, make_source
 from tests.db.test_schema import TABLES
 
 psycopg = pytest.importorskip("psycopg")
@@ -36,7 +36,7 @@ def test_rls_enabled_on_every_table(pg):
 @pytest.mark.parametrize("role", ["anon", "authenticated"])
 def test_role_sees_no_rows(pg, role):
     s = make_source(pg)
-    make_document(pg, s, status="current")
+    make_version(pg, s, status="current")
     _grant_like_supabase(pg, role)
     pg.execute(f"set local role {role}")
     for table in sorted(TABLES):
@@ -71,11 +71,11 @@ def test_public_has_no_execute_on_write_functions(pg):
 
 def test_service_role_reads_and_writes(pg):
     s = make_source(pg)
-    d = make_document(pg, s, text_sha256="t1")
+    d = make_version(pg, s, text_sha256="t1")
     pg.execute("set local role service_role")
     assert pg.execute("select count(*) from sources").fetchone()[0] >= 1
     pg.execute("select promote_version(%s, 'promoted (auto)')", (d,))
-    log_id = pg.execute("select log_answer(%s::jsonb, %s::uuid[])",
+    answer_id = pg.execute("select log_answer(%s::jsonb, %s::uuid[])",
                         ('{"question":"q","llm_prompt":"p","llm_response":"r","model_used":"m","latency_ms":1}', [d])
                         ).fetchone()[0]
-    assert log_id is not None
+    assert answer_id is not None
