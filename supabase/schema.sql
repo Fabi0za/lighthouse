@@ -833,8 +833,8 @@ grant execute on all functions in schema public to service_role;
 -- Only the backend may read or write the store. Supabase exposes the public schema to the
 -- anon and authenticated roles through its API, and its default privileges can grant them
 -- table access. Row level security with no policies denies them every row; service_role
--- bypasses row level security. The write functions run with the caller's rights, and
--- execute is revoked from everyone but service_role, so a public key cannot call them.
+-- bypasses row level security. Every function runs with the caller's rights, and execute
+-- is revoked from everyone but service_role, so a public key cannot call any of them.
 -- anon and authenticated must exist (they do on Supabase; the test setup creates them).
 alter table levels enable row level security;
 alter table scopes enable row level security;
@@ -854,18 +854,6 @@ alter table eval_runs enable row level security;
 alter table eval_results enable row level security;
 alter table eval_fact_results enable row level security;
 
-revoke execute on function begin_load(text, text, text, text, integer, text, text) from public, anon, authenticated;
-revoke execute on function fail_load(uuid, text, text, text) from public, anon, authenticated;
-revoke execute on function discard_version(uuid) from public, anon, authenticated;
-revoke execute on function promote_version(uuid, text) from public, anon, authenticated;
-revoke execute on function reject_version(uuid) from public, anon, authenticated;
-revoke execute on function hold_candidate(uuid, text, text) from public, anon, authenticated;
-revoke execute on function approve_candidate(uuid) from public, anon, authenticated;
-revoke execute on function raise_check_failed(text, text, text) from public, anon, authenticated;
-revoke execute on function resolve_overdue(text) from public, anon, authenticated;
-revoke execute on function confirm_source(text) from public, anon, authenticated;
-revoke execute on function raise_overdue_flags(interval) from public, anon, authenticated;
-revoke execute on function log_answer(jsonb, uuid[]) from public, anon, authenticated;
-revoke execute on function save_source(text, text, text[], text) from public, anon, authenticated;
-revoke execute on function record_eval_run(jsonb) from public, anon, authenticated;
-revoke execute on function save_eval_question(jsonb) from public, anon, authenticated;
+-- New functions are executable by PUBLIC by default. Nothing in this schema is for the
+-- public roles: revoke every function from them; service_role keeps its explicit grant.
+revoke execute on all functions in schema public from public, anon, authenticated;

@@ -62,6 +62,8 @@ Each entry: what changed and why, then the evidence. Measurements live in [basel
   Evidence: fingerprint tests per included and excluded block type; on the 11 cached parses: 11 distinct fingerprints, all changed from the old rule, V1.2 still differs from V1.3 (`scripts/experiments/fingerprint_check.py`, output in `plans-local/fingerprint-check.txt`); 436 tests pass.
 - **Page header blocks are page furniture: they no longer start a section or become chunk text; `CHUNKER_VERSION` is 2, and its guard covers the parser.** The parser treated the parser's `Header` blocks (letterhead, running titles, the BKW cover's version box) as section headings.
   Evidence: parser tests; on the 11 cached parses sections go from 421 to 419 and chunks from 1183 to 1181 (`scripts/experiments/sections_check.py`, output in `plans-local/sections-check.txt`); 439 tests pass with the database tests.
+- **No function in the schema is executable by `anon` or `authenticated`; execute is revoked from them on every function at once, and `service_role` keeps its grant.** New functions are executable by PUBLIC by default, so the read functions and the trigger functions were open to the public roles; row level security kept them harmless, but nothing in the schema is for those roles.
+  Evidence: access tests list no function executable by `anon` or `authenticated` and every function executable by `service_role`; 447 tests pass with the database tests.
 
 ## 2026-11-21
 

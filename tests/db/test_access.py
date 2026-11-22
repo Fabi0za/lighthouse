@@ -128,3 +128,27 @@ def test_service_role_raises_flags_and_reads_views(pg):
     assert isinstance(number, int)  # the identity column works for service_role
     for view in sorted(VIEWS):
         pg.execute(f"select count(*) from {view}")
+
+
+PUBLIC_ROLE_CHECK = """
+    select r.rolname, p.proname
+    from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+    cross join (select rolname from pg_roles where rolname in ('anon', 'authenticated')) r
+    where n.nspname = 'public' and p.prokind = 'f'
+      and not exists (select 1 from pg_depend d where d.objid = p.oid and d.deptype = 'e')
+      and has_function_privilege(r.rolname, p.oid, 'execute')
+    order by 1, 2
+"""
+
+
+def test_no_function_executable_by_anon_or_authenticated(pg):
+    assert pg.execute(PUBLIC_ROLE_CHECK).fetchall() == []
+
+
+def test_service_role_executes_every_function(pg):
+    missing = pg.execute(
+        "select p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace "
+        "where n.nspname = 'public' and p.prokind = 'f' "
+        "and not exists (select 1 from pg_depend d where d.objid = p.oid and d.deptype = 'e') "
+        "and not has_function_privilege('service_role', p.oid, 'execute')").fetchall()
+    assert missing == []
