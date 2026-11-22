@@ -154,3 +154,13 @@ def test_service_role_executes_every_function(pg):
         "and not exists (select 1 from pg_depend d where d.objid = p.oid and d.deptype = 'e') "
         "and not has_function_privilege('service_role', p.oid, 'execute')").fetchall()
     assert missing == []
+
+
+def test_no_function_name_is_overloaded(pg):
+    """PostgREST calls functions by name and argument names; an overload makes calls ambiguous."""
+    rows = pg.execute(
+        "select p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace "
+        "where n.nspname = 'public' and p.prokind = 'f' "
+        "and not exists (select 1 from pg_depend d where d.objid = p.oid and d.deptype = 'e') "
+        "group by p.proname having count(*) > 1").fetchall()
+    assert rows == []
