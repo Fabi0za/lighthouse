@@ -11,7 +11,7 @@ from typing import NamedTuple
 
 from pypdf import PdfReader, PdfWriter
 
-from app.generation.prompts import display_title
+from app.ingestion.embedder import embedding_input
 from app.ingestion.fingerprint import file_sha256, text_sha256
 
 
@@ -105,10 +105,11 @@ async def load_version(
             return LoadResult("dismissed", v["id"], None)
         db.set_text_fingerprint(version_id, text_hash, raw_output)
 
-        chunks = chunker.chunk_sections(sections, doc_title=display_title(title, version_label))
+        chunks = chunker.chunk_sections(sections)
         if not chunks:
             raise RuntimeError("parser returned no content")
-        embeddings = await embedder.embed_texts([c.content for c in chunks])
+        embeddings = await embedder.embed_texts(
+            [embedding_input(title, version_label, c.section_title, c.content) for c in chunks])
         db.insert_chunks([
             {
                 "version_id": version_id,

@@ -55,7 +55,9 @@ async def test_new_file_promoted(tmp_path):
         "src-1", "Doc", "V2", "https://example.org/v2.pdf", None, file_sha256(f)
     )
     db.set_text_fingerprint.assert_called_once_with("new-doc", text_sha256(SECTIONS), {"result": {"raw": True}})
-    assert chunker.chunk_sections.call_args.kwargs["doc_title"] == "Doc (V2)"
+    chunker.chunk_sections.assert_called_once_with(SECTIONS)
+    embedder.embed_texts.assert_awaited_once_with(["[Doc (V2) — S]\nc1"])
+    assert db.insert_chunks.call_args.args[0][0]["content"] == "c1"  # stored without the header
     db.promote_version.assert_called_once_with("new-doc")
     db.fail_load.assert_not_called()
 
@@ -201,7 +203,7 @@ async def test_chunk_header_uses_display_title_without_label(tmp_path):
     f = _pdf(tmp_path / "v.pdf")
     db, parser, chunker, embedder = _deps()
     await load_version(db, SOURCE, f, "Merkblatt", None, parser, chunker, embedder)
-    assert chunker.chunk_sections.call_args.kwargs["doc_title"] == "Merkblatt"
+    embedder.embed_texts.assert_awaited_once_with(["[Merkblatt — S]\nc1"])
 
 
 @pytest.mark.parametrize("status", ["loading", "failed"])

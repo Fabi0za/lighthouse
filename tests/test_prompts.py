@@ -67,3 +67,11 @@ def test_user_prompt_without_section_falls_back_to_page():
     prompt = build_user_prompt("q", [chunk])
     assert "[Source 1] T (V1.3), Page 3 (" in prompt
     assert " — ," not in prompt
+
+
+def test_prompt_shows_the_header_once():
+    chunk = {"content": "Steuerdraht 2 ist optional.", "section_title": "S", "page_number": 1,
+             "level": "operator", "rank": 2, "version_title": "T", "version_label": "V1.3"}
+    prompt = build_user_prompt("q", [chunk])
+    assert prompt.count("T (V1.3) — S") == 1
+    assert "[Source 1] T (V1.3) — S, Page 1 (Type: operator, Priority: 2)\nSteuerdraht 2 ist optional." in prompt

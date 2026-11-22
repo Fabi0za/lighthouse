@@ -30,9 +30,9 @@ import time
 from app.config import get_settings
 from app.generation.formatter import ResponseFormatter
 from app.generation.llm import LLMClient
-from app.generation.prompts import build_system_prompt, build_user_prompt, display_title
+from app.generation.prompts import build_system_prompt, build_user_prompt
 from app.ingestion.chunker import Chunker
-from app.ingestion.embedder import Embedder
+from app.ingestion.embedder import Embedder, embedding_input
 from app.ingestion.parser import ReductoParser
 from app.answers.logger import AnswerLogger
 from app.models.database import DatabaseClient
@@ -112,9 +112,9 @@ async def main():
         parser = ReductoParser(api_key="unused")  # only _extract_sections is used; no API call
         sections = parser._extract_sections(v12["parsed_output"])
         await parser.close()
-        chunks = Chunker(chunk_size=s.chunk_size, chunk_overlap=s.chunk_overlap).chunk_sections(
-            sections, doc_title=display_title(v12["title"], v12["version_label"]))
-        embeddings = await embedder.embed_texts([c.content for c in chunks])
+        chunks = Chunker(chunk_size=s.chunk_size, chunk_overlap=s.chunk_overlap).chunk_sections(sections)
+        embeddings = await embedder.embed_texts(
+            [embedding_input(v12["title"], v12["version_label"], c.section_title, c.content) for c in chunks])
         source = db.client.table("sources").select("*").eq("key", v12["source_key"]).execute().data[0]
         source_rank = db.client.table("levels").select("rank").eq("key", source["level"]) \
             .execute().data[0]["rank"]

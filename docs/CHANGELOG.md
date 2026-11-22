@@ -38,6 +38,8 @@ Each entry: what changed and why, then the evidence. Measurements live in [basel
   Evidence: script tests for each subcommand, including the setting and its override; config tests for the default and an override; 322 tests pass with the database tests.
 - **Chunks lose `token_count`, need an embedding, have one row per position in a version, and may have an empty section title; citations then fall back to the page.** `token_count` was read by nothing, and "Untitled Section" was invented text stored as data.
   Evidence: database tests for the unique position, the required embedding and the empty title; prompt and formatter tests give "T (V1.3), Page 3"; 330 tests pass with the database tests.
+- **Chunks store their text without the `[title — section]` prefix; the embedding input is built from the columns with the same header, and the prompt shows each header once.** The title was copied into every chunk, and the model saw each header twice.
+  Evidence: chunker, embedder, loader and prompt tests (embedded text `[Doc (V2) — S]` + text, stored text without it, one header per source in the prompt); 335 tests pass with the database tests.
 
 ## 2026-11-21
 

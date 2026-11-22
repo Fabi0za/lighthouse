@@ -196,11 +196,9 @@ class Chunker:
 
         return chunks
 
-    def chunk_sections(
-        self,
-        sections: list[dict],
-        doc_title: str | None = None,
-    ) -> list[Chunk]:
+    def chunk_sections(self, sections: list[dict]) -> list[Chunk]:
+        """Chunks of each section's text, numbered across the version. No header is added:
+        the embedding input and the prompt build it from the version and section."""
         all_chunks = []
         idx = 0
         for section in sections:
@@ -210,11 +208,6 @@ class Chunker:
                 page_number=section.get("page", 1),
                 start_index=idx,
             )
-            # Add contextual header to each chunk for better embedding & LLM context
-            if doc_title:
-                for chunk in chunks:
-                    header = f"[{doc_title} — {chunk.section_title}]\n"
-                    chunk.content = header + chunk.content
             all_chunks.extend(chunks)
             idx += len(chunks)
         return all_chunks

@@ -52,3 +52,13 @@ async def test_embed_texts_batches_at_limit(embedder):
     assert len(result) == MAX_BATCH + 5
     assert mock.call_count == 2
     assert len(mock.call_args_list[1].kwargs["texts"]) == 5
+
+
+def test_embedding_input_has_the_header_once():
+    from app.ingestion.embedder import embedding_input
+    assert embedding_input("T", "V1.3", "S", "text") == "[T (V1.3) — S]\ntext"
+
+
+def test_embedding_input_without_section_or_label():
+    from app.ingestion.embedder import embedding_input
+    assert embedding_input("T", None, "", "text") == "[T]\ntext"

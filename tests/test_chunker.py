@@ -63,3 +63,15 @@ def test_chunk_from_reducto_sections():
 def test_chunk_has_no_token_count():
     from app.ingestion.chunker import Chunk
     assert "token_count" not in Chunk.__dataclass_fields__
+
+
+def test_chunks_have_no_header():
+    chunker = Chunker(chunk_size=500, chunk_overlap=50)
+    chunks = chunker.chunk_sections([{"title": "S", "content": "Steuerdraht 2 ist optional.", "page": 4}])
+    assert [(c.content, c.section_title, c.page_number) for c in chunks] == [
+        ("Steuerdraht 2 ist optional.", "S", 4)]
+
+
+def test_chunk_sections_takes_no_title():
+    import inspect
+    assert "doc_title" not in inspect.signature(Chunker.chunk_sections).parameters

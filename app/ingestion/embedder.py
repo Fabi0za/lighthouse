@@ -2,8 +2,17 @@ from __future__ import annotations
 
 import cohere
 
+from app.generation.prompts import display_title
+
 # Cohere's v2 embed endpoint accepts at most 96 texts per request.
 MAX_BATCH = 96
+
+
+def embedding_input(version_title: str, version_label: str | None, section_title: str, content: str) -> str:
+    """The text embedded for a chunk: a header naming the version and section, then the chunk text."""
+    title = display_title(version_title, version_label)
+    header = f"[{title} — {section_title}]" if section_title else f"[{title}]"
+    return f"{header}\n{content}"
 
 
 class Embedder:
