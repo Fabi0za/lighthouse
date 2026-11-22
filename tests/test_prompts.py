@@ -6,7 +6,7 @@ def test_system_prompt_contains_key_instructions():
     assert "only" in prompt.lower() and "provided context" in prompt.lower()
     assert "cite" in prompt.lower()
     assert "nicht genügend informationen" in prompt.lower()
-    assert "hierarchy" in prompt.lower() or "higher-priority" in prompt.lower()
+    assert "higher rank" in prompt.lower()
 
 
 def test_user_prompt_contains_question_and_context():
@@ -32,8 +32,8 @@ def test_user_prompt_contains_question_and_context():
     assert "How do I wire component X?" in prompt
     assert "Wire component X to terminal Y." in prompt
     assert "Manual A" in prompt
-    assert "(Type: operator, Priority: 2)" in prompt
-    assert "(Type: national, Priority: 1)" in prompt
+    assert "(Level: operator, Rank: 2)" in prompt
+    assert "(Level: national, Rank: 1)" in prompt
 
 
 def test_user_prompt_empty_context():
@@ -74,4 +74,15 @@ def test_prompt_shows_the_header_once():
              "level": "operator", "rank": 2, "version_title": "T", "version_label": "V1.3"}
     prompt = build_user_prompt("q", [chunk])
     assert prompt.count("T (V1.3) — S") == 1
-    assert "[Source 1] T (V1.3) — S, Page 1 (Type: operator, Priority: 2)\nSteuerdraht 2 ist optional." in prompt
+    assert "[Source 1] T (V1.3) — S, Page 1 (Level: operator, Rank: 2)\nSteuerdraht 2 ist optional." in prompt
+
+
+def test_system_prompt_keeps_its_rules():
+    prompt = build_system_prompt()
+    for kept in ("Always respond in German", "Answer based ONLY on the provided context",
+                 "Cite every claim with [Document Title, Section, Page X]",
+                 "Ich habe nicht genügend Informationen, um diese Frage sicher zu beantworten.",
+                 "End your response with a confidence assessment: high, medium, or low."):
+        assert kept in prompt, kept
+    assert "assistant that answers from the provided documents" in prompt
+

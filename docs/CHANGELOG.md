@@ -56,6 +56,8 @@ Each entry: what changed and why, then the evidence. Measurements live in [basel
   Evidence: config tests for the default and `.env.example`; the answer-settings key test gives `top40-rerank8-rerank-v3.5-claude-sonnet-5-5-p1`.
 - **The reranker imports Cohere's rate-limit error directly.** It named the error through an attribute path that resolves only once the SDK has loaded the module itself, which its lazy imports do not guarantee.
   Evidence: a test that one rate-limit error is retried, and that the reranker's error class is the SDK's; 428 tests pass with the database tests.
+- **The prompt no longer uses the old project's words: no "field engineers" or "electrical installation documents", "higher rank" instead of "higher hierarchy priority", and `(Level: …, Rank: …)` instead of `(Type: …, Priority: …)`; `PROMPT_VERSION` is 2.** One vocabulary in code and docs; the rules themselves are unchanged (no tuning).
+  Evidence: the vocabulary test now scans `prompts.py` with no exemption; a test that every rule is still in the system prompt; 429 tests pass with the database tests.
 
 ## 2026-11-21
 

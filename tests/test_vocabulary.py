@@ -10,16 +10,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 OLD_WORDS = re.compile(r"grid|provider|hierarch|solar|\bpv\b|electrical", re.IGNORECASE)
-NOT_YET = {
-    "app/generation/prompts.py": "prompt wording changes in Slice F",
-}
-
-
 def _scanned_files() -> list[Path]:
     files = [ROOT / "supabase" / "schema.sql"]
     for folder in ("app", "eval", "scripts"):
         files += sorted((ROOT / folder).rglob("*.py"))
-    return [f for f in files if f.relative_to(ROOT).as_posix() not in NOT_YET]
+    return files
 
 
 def test_no_old_project_words():
@@ -43,7 +38,7 @@ def test_no_old_store_names():
     """The store's words are versions, chunks, answers, answer_versions."""
     hits = [
         f"{path.relative_to(ROOT)}:{n}: {line.strip()}"
-        for path in _scanned_files() + [ROOT / "app" / "generation" / "prompts.py"]
+        for path in _scanned_files()
         for n, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1)
         if OLD_STORE_NAMES.search(line)
     ]

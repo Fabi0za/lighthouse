@@ -18,7 +18,7 @@ from app.ingestion import chunker
 ROOT = Path(__file__).resolve().parent.parent
 
 RECORDED = {
-    "app/generation/prompts.py": ("PROMPT_VERSION", 1, "f444ac07297325c9b8d83f2cfe1f90898d46a61c024ef44ecf8d8b8eeb2a0e7f"),
+    "app/generation/prompts.py": ("PROMPT_VERSION", 2, "edc6fdf619645034cddf45b19027a5b4e41a34ee12a94aa841b86f45c6263222"),
     "app/ingestion/chunker.py": ("CHUNKER_VERSION", 1, "552ef27c36e7584f83868573a7a2a093e86cedcdce99ea919b5da152a5d79a8d"),
 }
 
