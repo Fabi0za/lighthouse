@@ -41,7 +41,6 @@ example questions instead — swap in your own to reproduce the workflow.
 - **Anthropic** for the LLM (`claude-sonnet-4-6`)
 - **Cohere** for neural re-ranking (`rerank-v3.5`)
 - **Claude Haiku 5.5** as the eval judge
-- LLM provider is configurable (Anthropic default; OpenAI optional, needs `OPENAI_API_KEY`)
 
 ## Setup
 
@@ -62,12 +61,12 @@ cp .env.example .env
 ```
 
 Required keys:
-- `SUPABASE_URL`, `SUPABASE_KEY`, `SUPABASE_SERVICE_KEY`
+- `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`
 - `REDUCTO_API_KEY`
 - `ANTHROPIC_API_KEY` (LLM and eval judge)
 - `COHERE_API_KEY` (embeddings and re-ranking)
 
-Defaults: `RETRIEVAL_TOP_K=40`, `RERANK_TOP_N=8`, `LLM_PROVIDER=anthropic`.
+Defaults: `RETRIEVAL_TOP_K=40`, `RERANK_TOP_N=8`.
 
 ### 3. Set up database
 
@@ -154,7 +153,7 @@ app/
 │   ├── reranker.py        # Cohere neural reranker
 │   └── search.py          # Vector search (+ hybrid search infrastructure)
 ├── generation/
-│   ├── llm.py             # LLM client (Anthropic/OpenAI)
+│   ├── llm.py             # Answer model client (Anthropic)
 │   ├── prompts.py         # Prompt templates
 │   └── formatter.py       # Response formatting
 └── logging/

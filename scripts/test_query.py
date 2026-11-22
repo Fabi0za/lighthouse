@@ -30,11 +30,7 @@ async def main():
         dimensions=settings.embedding_dimensions,
     )
 
-    llm_api_key = (
-        settings.anthropic_api_key if settings.llm_provider == "anthropic"
-        else settings.openai_api_key
-    )
-    llm = LLMClient(provider=settings.llm_provider, api_key=llm_api_key, model=settings.llm_model)
+    llm = LLMClient(api_key=settings.anthropic_api_key, model=settings.llm_model)
 
     known_providers = db.get_known_scopes()
     print(f"Known providers: {known_providers}")

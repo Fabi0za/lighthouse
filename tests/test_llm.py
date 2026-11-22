@@ -6,29 +6,15 @@ from app.generation.llm import LLMClient
 
 @pytest.fixture
 def anthropic_client():
-    return LLMClient(
-        provider="anthropic",
-        api_key="test-key",
-        model="claude-sonnet-4-6",
-    )
-
-
-@pytest.fixture
-def openai_client():
-    return LLMClient(
-        provider="openai",
-        api_key="test-key",
-        model="gpt-4o",
-    )
+    return LLMClient(api_key="test-key", model="claude-sonnet-4-6")
 
 
 def test_anthropic_client_init(anthropic_client):
-    assert anthropic_client.provider == "anthropic"
     assert anthropic_client.model == "claude-sonnet-4-6"
 
 
-def test_openai_client_init(openai_client):
-    assert openai_client.provider == "openai"
+def test_llm_client_has_no_vendor_switch():
+    assert not hasattr(LLMClient(api_key="k", model="m"), "provider")
 
 
 @pytest.mark.asyncio
@@ -42,23 +28,6 @@ async def test_anthropic_generate(anthropic_client):
         anthropic_client.client, "post", new_callable=AsyncMock, return_value=mock_response
     ):
         result = await anthropic_client.generate(
-            system_prompt="You are a helpful assistant.",
-            user_prompt="What is the answer?",
-        )
-        assert result == "The answer is 42."
-
-
-@pytest.mark.asyncio
-async def test_openai_generate(openai_client):
-    mock_response = MagicMock()
-    mock_response.status_code = 200
-    mock_response.json.return_value = {
-        "choices": [{"message": {"content": "The answer is 42."}}]
-    }
-    with patch.object(
-        openai_client.client, "post", new_callable=AsyncMock, return_value=mock_response
-    ):
-        result = await openai_client.generate(
             system_prompt="You are a helpful assistant.",
             user_prompt="What is the answer?",
         )

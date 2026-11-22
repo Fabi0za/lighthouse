@@ -92,7 +92,7 @@ async def main():
     label = {v12["id"]: "V1.2", v13["id"]: "V1.3"}
 
     embedder = Embedder(s.cohere_api_key, s.embedding_model, s.embedding_dimensions)
-    llm = LLMClient(provider=s.llm_provider, api_key=s.anthropic_api_key, model=s.llm_model)
+    llm = LLMClient(api_key=s.anthropic_api_key, model=s.llm_model)
     query_parser = QueryParser(known_providers=db.get_known_scopes())
     reranker = CohereReranker(api_key=s.cohere_api_key, top_n=s.rerank_top_n)
     formatter = ResponseFormatter()

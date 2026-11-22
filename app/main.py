@@ -97,7 +97,6 @@ def create_app(
             config_snapshot = {
                 "embedding_model": settings.embedding_model,
                 "llm_model": settings.llm_model,
-                "llm_provider": settings.llm_provider,
                 "chunk_size": settings.chunk_size,
                 "chunk_overlap": settings.chunk_overlap,
                 "retrieval_top_k": settings.retrieval_top_k,

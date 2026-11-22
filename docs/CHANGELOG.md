@@ -6,6 +6,8 @@ Each entry: what changed and why, then the evidence. Measurements live in [basel
 
 - **Remove the rule-based reranker and the scripts `test_models.py`, `test_cohere_rerank.py` and `migrate_html_chunks.py`.** Nothing in the pipeline used them, and `test_models.py` read `met` where the judge returns `present`.
   Evidence: no references remain (`git grep`); 176 tests pass with the database tests.
+- **The answer model is Anthropic only; `SUPABASE_KEY`, `LLM_PROVIDER` and `OPENAI_API_KEY` are no longer settings.** The OpenAI path was switched off and the anon key was never read; a `.env` that still sets one now fails at startup, naming the key.
+  Evidence: `tests/test_config.py` (each removed key gives exactly one `extra_forbidden` error on that key); 179 tests pass with the database tests.
 
 ## 2026-11-21
 
