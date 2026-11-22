@@ -265,3 +265,16 @@ async def test_promotion_reports_answers_that_saw_the_retired_version(tmp_path):
     result = await load_version(db, SOURCE, f, "Doc", None, parser, chunker, embedder)
     assert (result.action, result.version_id, result.retired_seen_by) == ("promoted", "new-doc", 2)
 
+
+
+async def test_load_version_stores_output_without_parser_links(tmp_path):
+    f = _pdf(tmp_path / "v.pdf")
+    db, parser, chunker, embedder = _deps()
+
+    async def parse(path):
+        return {"result": {"chunks": []}, "pdf_url": "https://parser.example/x"}, SECTIONS
+
+    parser.parse_pdf = parse
+    await load_version(db, SOURCE, f, "Doc", None, parser, chunker, embedder)
+    stored = db.set_text_fingerprint.call_args.args[2]
+    assert "pdf_url" not in stored

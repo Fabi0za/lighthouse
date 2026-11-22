@@ -13,6 +13,7 @@ from pypdf import PdfReader, PdfWriter
 
 from app.ingestion.embedder import embedding_input
 from app.ingestion.fingerprint import file_sha256, text_sha256
+from app.ingestion.parser import strip_links
 
 
 def first_pages(src: Path, max_pages: int, out_dir: Path) -> Path:
@@ -105,7 +106,7 @@ async def load_version(
                 continue
             db.discard_version(version_id)
             return LoadResult("dismissed", v["id"], None)
-        db.set_text_fingerprint(version_id, text_hash, raw_output)
+        db.set_text_fingerprint(version_id, text_hash, strip_links(raw_output))
 
         chunks = chunker.chunk_sections(sections)
         if not chunks:

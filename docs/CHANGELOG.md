@@ -44,6 +44,8 @@ Each entry: what changed and why, then the evidence. Measurements live in [basel
   Evidence: database tests for the settings checks and for mixing (refused across sources, allowed for a lone source); a loader test stops before any load; a hash guard fails when `chunker.py` changes without a decision on `CHUNKER_VERSION`; 356 tests pass with the database tests.
 - **Each answer points to the indexing and answer settings it used (top-k, rerank top-n and model, answer model, prompt version); `model_used` and the stored formatted answer are gone, and `GET /answers/{id}` derives the formatted answer and lists the versions seen.** An answer could not be traced to its prompt or reranker, and the formatted answer duplicated the response.
   Evidence: database tests for the settings references and checks; pipeline, logger, API and settings-row tests; a hash guard on `prompts.py` for `PROMPT_VERSION`; 367 tests pass with the database tests.
+- **Parsed output is stored without the parser's links (`pdf_url`, `studio_link`, each block's `image_url`).** They point into the parser's service and are no part of the version's content.
+  Evidence: `strip_links` tests; on all 11 cached parser outputs the extracted sections are identical with and without the links; 370 tests pass with the database tests.
 
 ## 2026-11-21
 

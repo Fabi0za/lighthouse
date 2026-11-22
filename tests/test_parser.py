@@ -112,3 +112,37 @@ async def test_parse_pdf_no_headers_uses_default(parser):
         raw_output, sections = await parser.parse_pdf("/tmp/test.pdf")
         assert len(sections) == 1
         assert sections[0]["title"] == ""  # no heading: empty, citations fall back to the page
+
+
+RAW_WITH_LINKS = {
+    "job_id": "j1", "pdf_url": "https://parser.example/pdf?sig=1", "studio_link": "https://parser.example/s/1",
+    "usage": {"pages": 2},
+    "result": {"type": "full", "chunks": [{"content": "c", "blocks": [
+        {"type": "Text", "content": "Steuerdraht 2 ist optional", "bbox": {"page": 1},
+         "image_url": "https://parser.example/img/1"},
+    ]}]},
+}
+
+
+def test_strip_links_removes_parser_urls_only():
+    from app.ingestion.parser import strip_links
+    stripped = strip_links(RAW_WITH_LINKS)
+    assert "pdf_url" not in stripped and "studio_link" not in stripped
+    block = stripped["result"]["chunks"][0]["blocks"][0]
+    assert "image_url" not in block
+    assert block["content"] == "Steuerdraht 2 ist optional"
+    assert (stripped["job_id"], stripped["usage"]) == ("j1", {"pages": 2})
+    assert "pdf_url" in RAW_WITH_LINKS  # the input is not changed
+
+
+def test_sections_unchanged_by_strip_links():
+    import json
+    from pathlib import Path
+    from app.ingestion.parser import strip_links
+    cached = sorted((Path(__file__).resolve().parent.parent / "plans-local" / "parsed").glob("*.json"))
+    if not cached:
+        pytest.skip("no cached parser output on this machine")
+    p = ReductoParser(api_key="unused")
+    for f in cached:
+        raw = json.loads(f.read_text(encoding="utf-8"))
+        assert p._extract_sections(strip_links(raw)) == p._extract_sections(raw), f.name

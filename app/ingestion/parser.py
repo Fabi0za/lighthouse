@@ -99,6 +99,27 @@ def _html_table_to_markdown(html: str) -> str:
     return result
 
 
+PARSER_LINKS = ("pdf_url", "studio_link")  # top-level links into the parser's service
+BLOCK_LINKS = ("image_url",)
+
+
+def strip_links(raw_output: dict[str, Any]) -> dict[str, Any]:
+    """A copy of the parser output without links into the parser's service.
+
+    They expire or point at the parser's copy of the file, and are no part of the
+    version's content; section extraction does not read them.
+    """
+    out = {k: v for k, v in raw_output.items() if k not in PARSER_LINKS}
+    result = out.get("result")
+    if isinstance(result, dict) and isinstance(result.get("chunks"), list):
+        out["result"] = {**result, "chunks": [
+            {**chunk, "blocks": [{k: v for k, v in block.items() if k not in BLOCK_LINKS}
+                                 for block in chunk.get("blocks", [])]}
+            for chunk in result["chunks"]
+        ]}
+    return out
+
+
 class ReductoParser:
     def __init__(self, api_key: str):
         self.api_key = api_key
