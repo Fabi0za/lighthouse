@@ -29,7 +29,7 @@ No relevant context documents were found. State that you have no relevant contex
         title = chunk.get("version_title", "Unknown Document")
         section = chunk.get("section_title", "Unknown Section")
         page = chunk.get("page_number", "?")
-        priority = chunk.get("authority_rank", 0)
+        priority = chunk.get("rank", 0)
         level = chunk.get("level", "unknown")
         content = chunk.get("content", "")
 

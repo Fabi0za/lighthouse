@@ -110,10 +110,12 @@ async def main():
             sections, doc_title=v12["title"])
         embeddings = await embedder.embed_texts([c.content for c in chunks])
         source = db.client.table("sources").select("*").eq("id", v12["source_id"]).execute().data[0]
-        scopes = [r["scope"] for r in db.client.table("source_scopes").select("scope")
+        source_rank = db.client.table("levels").select("rank").eq("key", source["level"]) \
+            .execute().data[0]["rank"]
+        scopes = [r["scope_key"] for r in db.client.table("source_scopes").select("scope_key")
                   .eq("source_id", v12["source_id"]).execute().data]
         source_fields = {"source_id": source["id"], "level": source["level"],
-                         "authority_rank": source["authority_rank"], "scopes": sorted(scopes)}
+                         "rank": source_rank, "scopes": sorted(scopes)}
         scratch_built = (chunks, embeddings, source_fields)
         results["scratch_chunk_count"] = len(chunks)
 
@@ -150,7 +152,7 @@ async def main():
                 if args.mode == "current":
                     version_ids = list(dict.fromkeys(c["version_id"] for c in reranked))
                     answer_id = logger.log(
-                        question=question, detected_filters=parsed.to_filters(),
+                        question=question, detected_scope=parsed.detected_scope,
                         retrieved_chunks=retrieved, reranked_chunks=reranked, llm_prompt=user_prompt,
                         llm_response=answer, formatted_answer=formatted, model_used=llm.model,
                         latency_ms=int((time.monotonic() - start) * 1000), version_ids=version_ids,

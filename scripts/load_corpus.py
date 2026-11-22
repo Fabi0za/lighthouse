@@ -36,7 +36,7 @@ from app.ingestion.parser import ReductoParser
 from app.ingestion.versions import cached_output, first_pages, load_version  # noqa: F401 - first_pages re-exported
 from app.models.database import DatabaseClient
 
-AUTHORITY_RANK = {"national": 1, "operator": 2}
+LEVELS = ("national", "operator")  # until corpus.yaml defines levels
 SOURCE_FIELDS = ("title", "issuer", "level")
 VERSION_FIELDS = ("path", "title")
 
@@ -58,10 +58,6 @@ class CorpusSource:
     listing_address: str | None
     versions: list[CorpusVersion] = field(default_factory=list)
 
-    @property
-    def authority_rank(self) -> int:
-        return AUTHORITY_RANK[self.level]
-
 
 def load_corpus(corpus_path: Path, repo_root: Path) -> list[CorpusSource]:
     """Read and validate corpus.yaml. Raises ValueError listing every problem found."""
@@ -77,8 +73,8 @@ def load_corpus(corpus_path: Path, repo_root: Path) -> list[CorpusSource]:
         if missing:
             problems.append(f"{label}: missing {', '.join(missing)}")
             continue
-        if raw["level"] not in AUTHORITY_RANK:
-            problems.append(f"{label}: level must be one of {sorted(AUTHORITY_RANK)}")
+        if raw["level"] not in LEVELS:
+            problems.append(f"{label}: level must be one of {sorted(LEVELS)}")
             continue
         scopes = list(raw.get("scopes") or [])
         if raw["level"] == "operator" and not scopes:
@@ -146,8 +142,7 @@ def plan(
 
 def sync_source(db, stored: dict, s: CorpusSource) -> None:
     """Bring a stored source's fields and scopes in line with corpus.yaml, and say what changed."""
-    wanted = {"issuer": s.issuer, "level": s.level, "authority_rank": s.authority_rank,
-              "listing_address": s.listing_address}
+    wanted = {"issuer": s.issuer, "level": s.level, "listing_address": s.listing_address}
     changed = {k: v for k, v in wanted.items() if stored.get(k) != v}
     notes = [f"{k} {stored.get(k)!r} -> {v!r}" for k, v in changed.items()]
     if changed:
@@ -171,7 +166,7 @@ async def load_all(sources, repo_root, db, parser, chunker, embedder, load=None,
             sync_source(db, source, s)
         else:
             source = db.insert_source(
-                s.title, s.issuer, s.level, s.authority_rank, s.scopes, None, s.listing_address
+                s.title, s.issuer, s.level, s.scopes, None, s.listing_address
             )
         for k, v in enumerate(s.versions):
             cached = cached_output(parsed_cache, file_sha256(repo_root / v.path))

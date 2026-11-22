@@ -15,6 +15,7 @@ from pypdf import PdfWriter
 
 from app.ingestion.chunker import Chunk
 from app.ingestion.versions import load_version
+from tests.db.conftest import make_reference_rows
 
 psycopg = pytest.importorskip("psycopg")
 from psycopg.rows import dict_row
@@ -117,8 +118,10 @@ def db(pg_db_url):
 
 @pytest.fixture
 def source(db):
-    return str(db._one("insert into sources (title, issuer, level, authority_rank) "
-                       "values ('S', 'I', 'operator', 2) returning id")["id"])
+    make_reference_rows(db.c)
+    db.c.commit()
+    return str(db._one("insert into sources (title, issuer, level) "
+                       "values ('S', 'I', 'operator') returning id")["id"])
 
 
 async def test_failed_load_after_text_fingerprint_reloads_cleanly(db, source, tmp_path):

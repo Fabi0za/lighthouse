@@ -112,18 +112,18 @@ def test_find_source_raises_on_two_matches(db, mock_supabase):
 def test_insert_source_writes_scopes(db, mock_supabase):
     source_id = str(uuid.uuid4())
     mock_supabase.execute.side_effect = [MagicMock(data=[{"id": source_id}]), MagicMock(data=[])]
-    db.insert_source("T", "I", "operator", 2, ["A", "B"], None, None)
+    db.insert_source("T", "I", "operator", ["bkw", "ekz"], None, None)
     tables = [c.args[0] for c in mock_supabase.table.call_args_list]
     assert tables == ["sources", "source_scopes"]
     assert mock_supabase.insert.call_args_list[1].args[0] == [
-        {"source_id": source_id, "scope": "A"},
-        {"source_id": source_id, "scope": "B"},
+        {"source_id": source_id, "scope_key": "bkw"},
+        {"source_id": source_id, "scope_key": "ekz"},
     ]
 
 
 def test_insert_source_without_scopes_writes_no_scope_rows(db, mock_supabase):
     mock_supabase.execute.side_effect = [MagicMock(data=[{"id": "s"}])]
-    db.insert_source("T", "I", "national", 1, [], None, None)
+    db.insert_source("T", "I", "national", [], None, None)
     assert [c.args[0] for c in mock_supabase.table.call_args_list] == ["sources"]
 
 
@@ -149,14 +149,14 @@ def test_set_text_fingerprint(db, mock_supabase):
 
 
 def test_get_known_scopes(db, mock_supabase):
-    mock_supabase.execute.return_value = MagicMock(data=[{"scope": "A"}, {"scope": "B"}, {"scope": "A"}])
-    assert sorted(db.get_known_scopes()) == ["A", "B"]
-    mock_supabase.table.assert_called_with("source_scopes")
+    mock_supabase.execute.return_value = MagicMock(data=[{"key": "bkw"}, {"key": "ekz"}])
+    assert sorted(db.get_known_scopes()) == ["bkw", "ekz"]
+    mock_supabase.table.assert_called_with("scopes")
 
 
 def test_get_scopes(db, mock_supabase):
-    mock_supabase.execute.return_value = MagicMock(data=[{"scope": "B"}, {"scope": "A"}])
-    assert db.get_scopes("s") == ["A", "B"]
+    mock_supabase.execute.return_value = MagicMock(data=[{"scope_key": "ekz"}, {"scope_key": "bkw"}])
+    assert db.get_scopes("s") == ["bkw", "ekz"]
     mock_supabase.table.assert_called_with("source_scopes")
 
 
@@ -168,11 +168,11 @@ def test_update_source(db, mock_supabase):
 
 
 def test_set_scopes_replaces_rows(db, mock_supabase):
-    db.set_scopes("s", ["A", "B"])
+    db.set_scopes("s", ["bkw", "ekz"])
     assert [c.args[0] for c in mock_supabase.table.call_args_list] == ["source_scopes", "source_scopes"]
     mock_supabase.delete.assert_called_once()
     assert mock_supabase.insert.call_args.args[0] == [
-        {"source_id": "s", "scope": "A"}, {"source_id": "s", "scope": "B"}]
+        {"source_id": "s", "scope_key": "bkw"}, {"source_id": "s", "scope_key": "ekz"}]
 
 
 def test_set_scopes_to_none_only_deletes(db, mock_supabase):

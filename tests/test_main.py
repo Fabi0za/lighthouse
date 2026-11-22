@@ -29,7 +29,7 @@ def mock_db():
         "status": "current", "ingestion_status": "completed"
     }
     db.get_answer.return_value = {
-        "id": str(uuid.uuid4()), "question": "test?", "detected_filters": {},
+        "id": str(uuid.uuid4()), "question": "test?", "detected_scope": None,
         "retrieved_chunks": [], "reranked_chunks": [], "llm_prompt": "p",
         "llm_response": "r", "formatted_answer": {}, "model_used": "test",
         "latency_ms": 100,

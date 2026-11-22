@@ -34,7 +34,6 @@ class QueryPipeline:
 
         # 1. Parse query for metadata hints
         parsed = self.query_parser.parse(question)
-        detected_filters = parsed.to_filters()
 
         # 2. Vector search
         retrieved_chunks = await self.vector_search.search(question)
@@ -54,7 +53,7 @@ class QueryPipeline:
         latency_ms = int((time.monotonic() - start) * 1000)
         answer_id = self.logger.log(
             question=question,
-            detected_filters=detected_filters,
+            detected_scope=parsed.detected_scope,
             retrieved_chunks=retrieved_chunks,
             reranked_chunks=reranked_chunks,
             llm_prompt=user_prompt,

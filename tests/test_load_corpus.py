@@ -58,9 +58,10 @@ def _files(tmp_path):
 def test_load_corpus_reads_sources_and_versions(tmp_path):
     _files(tmp_path)
     national, operator = lc.load_corpus(_corpus(tmp_path, GOOD), tmp_path)
-    assert (national.level, national.authority_rank, national.scopes) == ("national", 1, [])
+    assert (national.level, national.scopes) == ("national", [])
+    assert not hasattr(national, "authority_rank")
     assert national.versions[0].address == "https://example.org/a.pdf"
-    assert (operator.authority_rank, operator.scopes) == (2, ["X", "Y"])
+    assert operator.scopes == ["X", "Y"]
     assert operator.listing_address == "https://example.org/list"
     assert [v.path for v in operator.versions] == ["v1.pdf", "v2.pdf"]
     assert operator.versions[1].max_pages == 4
@@ -145,7 +146,7 @@ async def test_load_all_creates_source_once_and_loads_versions_in_order(tmp_path
     sources = lc.load_corpus(_corpus(tmp_path, GOOD), tmp_path)
     db = MagicMock()
     db.find_source.side_effect = [None, {"id": "existing", "issuer": "Op", "level": "operator",
-                                         "authority_rank": 2, "listing_address": "https://example.org/list"}]
+                                         "listing_address": "https://example.org/list"}]
     db.get_scopes.return_value = ["X", "Y"]
     db.insert_source.return_value = {"id": "new-src"}
     calls = []
@@ -157,8 +158,7 @@ async def test_load_all_creates_source_once_and_loads_versions_in_order(tmp_path
 
     counts = await lc.load_all(sources, tmp_path, db, None, None, None, load=fake_load)
 
-    db.insert_source.assert_called_once_with("National rules", "VSE", "national", 1, [],
-                                             None, None)
+    db.insert_source.assert_called_once_with("National rules", "VSE", "national", [], None, None)
     assert calls == [("new-src", "a.pdf", None), ("existing", "v1.pdf", None), ("existing", "v2.pdf", 4)]
     assert counts == {"promoted": 3}
     db.update_source.assert_not_called()  # stored source already matches corpus.yaml
@@ -218,7 +218,7 @@ sources:
 
 
 def _stored(**over):
-    row = {"id": "s", "issuer": "Op", "level": "operator", "authority_rank": 2,
+    row = {"id": "s", "issuer": "Op", "level": "operator",
            "listing_address": "https://example.org/list"}
     return {**row, **over}
 
@@ -231,13 +231,13 @@ async def test_load_all_syncs_changed_source_fields_and_scopes(tmp_path, capsys)
     _files(tmp_path)
     sources = lc.load_corpus(_corpus(tmp_path, GOOD), tmp_path)[1:]  # the operator source
     db = MagicMock()
-    db.find_source.return_value = _stored(issuer="Old issuer", level="national", authority_rank=1)
+    db.find_source.return_value = _stored(issuer="Old issuer", level="national")
     db.get_scopes.return_value = ["X"]
 
     await lc.load_all(sources, tmp_path, db, None, None, None, load=_noop_load)
 
     db.update_source.assert_called_once_with(
-        "s", {"issuer": "Op", "level": "operator", "authority_rank": 2})
+        "s", {"issuer": "Op", "level": "operator"})
     db.set_scopes.assert_called_once_with("s", ["X", "Y"])
     out = capsys.readouterr().out
     assert "updated source 'Operator rules'" in out

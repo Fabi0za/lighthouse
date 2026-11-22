@@ -7,7 +7,7 @@ from app.answers.logger import AnswerLogger
 def _log(logger, version_ids):
     return logger.log(
         question="How do I wire X?",
-        detected_filters={"scope": "BKW"},
+        detected_scope="bkw",
         retrieved_chunks=[{"content": "chunk1", "similarity": 0.9}],
         reranked_chunks=[{"content": "chunk1", "rerank_score": 1.1}],
         llm_prompt="full prompt text",
@@ -29,7 +29,7 @@ def test_log_stores_answer_with_versions_in_one_call():
     mock_db.log_answer.assert_called_once()
     call_data, ids = mock_db.log_answer.call_args.args
     assert call_data["question"] == "How do I wire X?"
-    assert call_data["detected_filters"] == {"scope": "BKW"}
+    assert call_data["detected_scope"] == "bkw"
     assert call_data["latency_ms"] == 1234
     assert ids == ["d1", "d2"]
     assert result == answer_id

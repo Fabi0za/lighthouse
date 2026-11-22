@@ -17,7 +17,7 @@ def test_user_prompt_contains_question_and_context():
             "page_number": 5,
             "level": "operator",
             "version_title": "Manual A",
-            "authority_rank": 2,
+            "rank": 2,
         },
         {
             "content": "General wiring standards require grounding.",
@@ -25,7 +25,7 @@ def test_user_prompt_contains_question_and_context():
             "page_number": 2,
             "level": "national",
             "version_title": "Regulations",
-            "authority_rank": 1,
+            "rank": 1,
         },
     ]
     prompt = build_user_prompt("How do I wire component X?", chunks)

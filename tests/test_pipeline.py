@@ -11,8 +11,7 @@ def mock_deps():
     query_parser = MagicMock()
     query_parser.parse.return_value = MagicMock(
         original_question="How do I wire X for BKW?",
-        detected_scope="BKW",
-        to_filters=lambda: {"scope": "BKW"},
+        detected_scope="bkw",
     )
 
     vector_search = AsyncMock()
@@ -24,8 +23,8 @@ def mock_deps():
             "version_id": "d1",
             "level": "operator",
             "version_title": "Manual A",
-            "scopes": ["BKW"],
-            "authority_rank": 2,
+            "scopes": ["bkw"],
+            "rank": 2,
             "similarity": 0.9,
         },
     ]
@@ -39,8 +38,8 @@ def mock_deps():
             "version_id": "d1",
             "level": "operator",
             "version_title": "Manual A",
-            "scopes": ["BKW"],
-            "authority_rank": 2,
+            "scopes": ["bkw"],
+            "rank": 2,
             "similarity": 0.9,
             "rerank_score": 1.2,
         },
@@ -118,7 +117,7 @@ async def test_pipeline_logs_detected_scope(mock_deps):
     pipeline = QueryPipeline(**mock_deps)
     question = "How do I wire X for BKW?"
     await pipeline.run(question)
-    assert mock_deps["logger"].log.call_args.kwargs["detected_filters"] == {"scope": "BKW"}
+    assert mock_deps["logger"].log.call_args.kwargs["detected_scope"] == "bkw"
     mock_deps["reranker"].rerank.assert_called_once_with(
         mock_deps["vector_search"].search.return_value, query=question
     )

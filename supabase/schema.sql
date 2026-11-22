@@ -5,14 +5,31 @@
 create extension if not exists vector;
 
 -- ---------------------------------------------------------------------------
+-- Levels and scopes: lists that grow, kept as tables (data comes from corpus.yaml)
+-- ---------------------------------------------------------------------------
+create table levels (
+    key text primary key check (key ~ '^[a-z]+(-[a-z]+)*$'),
+    rank integer not null unique check (rank > 0),
+    requires_scope boolean not null default false   -- a source of this level needs a scope
+);
+
+comment on column levels.rank is
+    'Higher rank wins: where sources conflict, the source whose level has the higher rank prevails.';
+
+-- Where a source applies, e.g. one operator's network.
+create table scopes (
+    key text primary key check (key ~ '^[a-z]+(-[a-z]+)*$'),
+    name text not null
+);
+
+-- ---------------------------------------------------------------------------
 -- Sources: a watched publication
 -- ---------------------------------------------------------------------------
 create table sources (
     id uuid primary key default gen_random_uuid(),
     title text not null,
     issuer text not null,
-    level text not null,
-    authority_rank integer not null,
+    level text not null references levels(key),
     address text unique,              -- address watched now; moves on promotion
     listing_address text,             -- page that links to the file
     confirmed_at timestamptz,         -- last confirmed by a person; null = never
@@ -22,8 +39,8 @@ create table sources (
 -- Where a source applies. No rows = applies everywhere.
 create table source_scopes (
     source_id uuid not null references sources(id) on delete cascade,
-    scope text not null,
-    primary key (source_id, scope)
+    scope_key text not null references scopes(key),
+    primary key (source_id, scope_key)
 );
 
 -- ---------------------------------------------------------------------------
@@ -143,7 +160,7 @@ create index chunks_embedding_idx
 create table answers (
     id uuid primary key default gen_random_uuid(),
     question text not null,
-    detected_filters jsonb not null default '{}',
+    detected_scope text references scopes(key),     -- scope named in the question, if any
     retrieved_chunks jsonb not null default '[]',
     reranked_chunks jsonb not null default '[]',   -- chunk text the model saw
     llm_prompt text not null,
@@ -246,10 +263,10 @@ language plpgsql as $$
 declare
     v_id uuid;
 begin
-    insert into answers (question, detected_filters, retrieved_chunks, reranked_chunks,
+    insert into answers (question, detected_scope, retrieved_chunks, reranked_chunks,
                             llm_prompt, llm_response, formatted_answer, model_used, latency_ms)
     values (p_answer->>'question',
-            coalesce(p_answer->'detected_filters', '{}'),
+            p_answer->>'detected_scope',
             coalesce(p_answer->'retrieved_chunks', '[]'),
             coalesce(p_answer->'reranked_chunks', '[]'),
             p_answer->>'llm_prompt',
@@ -280,7 +297,7 @@ returns table (
     page_number integer,
     chunk_index integer,
     level text,
-    authority_rank integer,
+    rank integer,
     scopes text[],
     token_count integer,
     similarity float,
@@ -297,8 +314,8 @@ as $$
         c.page_number,
         c.chunk_index,
         s.level,
-        s.authority_rank,
-        coalesce((select array_agg(ss.scope order by ss.scope)
+        l.rank,
+        coalesce((select array_agg(ss.scope_key order by ss.scope_key)
                   from source_scopes ss where ss.source_id = s.id), '{}'),
         c.token_count,
         1 - (c.embedding <=> query_embedding),
@@ -306,6 +323,7 @@ as $$
     from chunks c
     join versions v on v.id = c.version_id and v.status = 'current'
     join sources s on s.id = v.source_id
+    join levels l on l.key = s.level
     order by c.embedding <=> query_embedding
     limit match_count;
 $$;
@@ -327,6 +345,8 @@ grant execute on all functions in schema public to service_role;
 -- bypasses row level security. The write functions run with the caller's rights, and
 -- execute is revoked from everyone but service_role, so a public key cannot call them.
 -- anon and authenticated must exist (they do on Supabase; the test setup creates them).
+alter table levels enable row level security;
+alter table scopes enable row level security;
 alter table sources enable row level security;
 alter table source_scopes enable row level security;
 alter table flags enable row level security;

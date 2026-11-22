@@ -12,6 +12,8 @@ Each entry: what changed and why, then the evidence. Measurements live in [basel
   Evidence: `test_documents_are_read_only` failed with the PUT route present and passes now; `test_ingest_is_gone`; 169 tests pass with the database tests.
 - **Tables, functions and endpoints use the store's words: `versions`, `chunks`, `answers`, `answer_versions`; `GET /versions`, `GET /answers/{id}`; keyword search removed from the schema.** One word per thing in schema, code and docs; keyword search had no caller since the hybrid search went.
   Evidence: `test_no_old_store_names` listed every old table, column and endpoint name before and none after; 173 tests pass with the database tests.
+- **Levels and scopes are tables; a source's rank comes from its level, and higher rank wins; an answer records its detected scope as a reference, matched as a whole word on the scope key.** Rank was stored on every source as well as in the loader, scope values were free text, and the detected scope sat in JSON nobody read.
+  Evidence: database tests for unknown level, unknown scope, duplicate rank, the stated rank direction and the scope foreign key on answers; "Bekzahl" no longer matches `ekz`; 183 tests pass with the database tests.
 
 ## 2026-11-21
 

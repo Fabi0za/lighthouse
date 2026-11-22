@@ -49,12 +49,12 @@ def test_scratch_chunks_carry_version_and_source_fields():
             self.chunk_index, self.token_count = i, 3
 
     version = {"id": "v12", "title": "Doc (V1.2)"}
-    source_fields = {"source_id": "s", "level": "operator", "authority_rank": 2, "scopes": ["BKW"]}
+    source_fields = {"source_id": "s", "level": "operator", "rank": 2, "scopes": ["bkw"]}
     out = vb.scratch_chunks([Chunk(0), Chunk(1)], [[1.0, 0.0], [0.0, 1.0]], [1.0, 0.0], version, source_fields)
     assert [c["similarity"] for c in out] == pytest.approx([1.0, 0.0])
     assert out[0]["version_id"] == "v12"
     assert out[0]["version_title"] == "Doc (V1.2)"
-    assert out[0]["scopes"] == ["BKW"]
+    assert out[0]["scopes"] == ["bkw"]
     assert out[0]["id"] == "scratch-v12-0"
 
 

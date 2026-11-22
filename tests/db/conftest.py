@@ -75,11 +75,25 @@ def pg_db_url():
 
 # --- row helpers -------------------------------------------------------------
 
-def make_source(conn, title: str = "Source", address: str | None = None) -> str:
+def make_reference_rows(conn) -> None:
+    """Levels national (rank 1) and operator (rank 2, needs a scope); scopes bkw, ekz."""
+    conn.execute(
+        "insert into levels (key, rank, requires_scope) values "
+        "('national', 1, false), ('operator', 2, true) on conflict do nothing"
+    )
+    conn.execute(
+        "insert into scopes (key, name) values ('bkw', 'BKW Energie AG'), "
+        "('ekz', 'Elektrizitätswerke des Kantons Zürich') on conflict do nothing"
+    )
+
+
+def make_source(conn, title: str = "Source", address: str | None = None,
+                level: str = "operator") -> str:
+    make_reference_rows(conn)
     return str(conn.execute(
-        "insert into sources (title, issuer, level, authority_rank, address) "
-        "values (%s, 'Issuer', 'operator', 2, %s) returning id",
-        (title, address),
+        "insert into sources (title, issuer, level, address) "
+        "values (%s, 'Issuer', %s, %s) returning id",
+        (title, level, address),
     ).fetchone()[0])
 
 

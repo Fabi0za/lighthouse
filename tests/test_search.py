@@ -18,7 +18,7 @@ def mock_db():
             "page_number": 5,
             "level": "operator",
             "scopes": [],
-            "authority_rank": 5,
+            "rank": 5,
             "similarity": 0.85,
         },
         {
@@ -28,7 +28,7 @@ def mock_db():
             "page_number": 2,
             "level": "operator",
             "scopes": [],
-            "authority_rank": 1,
+            "rank": 1,
             "similarity": 0.78,
         },
     ]

@@ -48,7 +48,7 @@ def test_role_cannot_insert(pg, role):
     _grant_like_supabase(pg, role)
     pg.execute(f"set local role {role}")
     with pytest.raises(errors.InsufficientPrivilege):
-        pg.execute("insert into sources (title, issuer, level, authority_rank) values ('t', 'i', 'l', 1)")
+        pg.execute("insert into sources (title, issuer, level) values ('t', 'i', 'national')")
 
 
 @pytest.mark.parametrize("role", ["anon", "authenticated"])

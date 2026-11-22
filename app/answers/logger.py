@@ -13,7 +13,7 @@ class AnswerLogger:
     def log(
         self,
         question: str,
-        detected_filters: dict[str, Any],
+        detected_scope: str | None,
         retrieved_chunks: list[dict[str, Any]],
         reranked_chunks: list[dict[str, Any]],
         llm_prompt: str,
@@ -26,7 +26,7 @@ class AnswerLogger:
         """Store the answer and the versions its top chunks came from, in one transaction."""
         log_data = {
             "question": question,
-            "detected_filters": detected_filters,
+            "detected_scope": detected_scope,
             "retrieved_chunks": retrieved_chunks,
             "reranked_chunks": reranked_chunks,
             "llm_prompt": llm_prompt,

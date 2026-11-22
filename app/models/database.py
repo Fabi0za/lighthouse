@@ -29,7 +29,6 @@ class DatabaseClient:
         title: str,
         issuer: str,
         level: str,
-        authority_rank: int,
         scopes: list[str],
         address: str | None,
         listing_address: str | None,
@@ -38,19 +37,21 @@ class DatabaseClient:
             "title": title,
             "issuer": issuer,
             "level": level,
-            "authority_rank": authority_rank,
             "address": address,
             "listing_address": listing_address,
         }).execute().data[0]
         if scopes:
             self.client.table("source_scopes").insert(
-                [{"source_id": source["id"], "scope": s} for s in scopes]
+                [{"source_id": source["id"], "scope_key": s} for s in scopes]
             ).execute()
         return source
 
     def get_scopes(self, source_id: str) -> list[str]:
-        rows = self.client.table("source_scopes").select("scope").eq("source_id", str(source_id)).execute().data
-        return sorted(row["scope"] for row in rows)
+        rows = (
+            self.client.table("source_scopes").select("scope_key")
+            .eq("source_id", str(source_id)).execute().data
+        )
+        return sorted(row["scope_key"] for row in rows)
 
     def update_source(self, source_id: str, fields: dict[str, Any]) -> None:
         self.client.table("sources").update(fields).eq("id", str(source_id)).execute()
@@ -60,12 +61,13 @@ class DatabaseClient:
         self.client.table("source_scopes").delete().eq("source_id", str(source_id)).execute()
         if scopes:
             self.client.table("source_scopes").insert(
-                [{"source_id": str(source_id), "scope": s} for s in scopes]
+                [{"source_id": str(source_id), "scope_key": s} for s in scopes]
             ).execute()
 
     def get_known_scopes(self) -> list[str]:
-        rows = self.client.table("source_scopes").select("scope").execute().data
-        return list({row["scope"] for row in rows})
+        """Keys of all defined scopes."""
+        rows = self.client.table("scopes").select("key").execute().data
+        return [row["key"] for row in rows]
 
     # --- versions -----------------------------------------------------------
 

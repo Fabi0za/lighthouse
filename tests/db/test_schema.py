@@ -3,13 +3,13 @@ from __future__ import annotations
 
 import pytest
 
-from tests.db.conftest import make_version, make_flag, make_source
+from tests.db.conftest import make_flag, make_reference_rows, make_source, make_version
 
 psycopg = pytest.importorskip("psycopg")
 from psycopg import errors
 
 TABLES = {
-    "sources", "source_scopes", "versions", "chunks", "flags",
+    "levels", "scopes", "sources", "source_scopes", "versions", "chunks", "flags",
     "answers", "answer_versions", "eval_questions", "eval_runs",
 }
 
@@ -105,7 +105,7 @@ def test_used_version_not_deletable(pg):
 
 def test_scopes_many_per_source(pg):
     s = make_source(pg)
-    pg.execute("insert into source_scopes (source_id, scope) values (%s, 'A'), (%s, 'B')", (s, s))
+    pg.execute("insert into source_scopes (source_id, scope_key) values (%s, 'bkw'), (%s, 'ekz')", (s, s))
     n = pg.execute("select count(*) from source_scopes where source_id = %s", (s,)).fetchone()[0]
     assert n == 2
 
@@ -145,3 +145,38 @@ def test_reinstating_to_pending_with_open_flag_succeeds(pg):
         "update versions set status = 'pending', retired_at = null, flag_id = %s where id = %s",
         (make_flag(pg, s), d),
     )
+
+
+# --- levels and scopes -------------------------------------------------------
+
+def test_level_must_exist(pg):
+    make_reference_rows(pg)
+    with pytest.raises(errors.ForeignKeyViolation):
+        pg.execute("insert into sources (title, issuer, level) values ('t', 'i', 'x')")
+
+
+def test_scope_must_exist(pg):
+    s = make_source(pg)
+    with pytest.raises(errors.ForeignKeyViolation):
+        pg.execute("insert into source_scopes (source_id, scope_key) values (%s, 'x')", (s,))
+
+
+def test_rank_unique(pg):
+    make_reference_rows(pg)
+    with pytest.raises(errors.UniqueViolation):
+        pg.execute("insert into levels (key, rank) values ('other', 1)")
+
+
+def test_rank_direction_is_stated(pg):
+    comment = pg.execute(
+        "select col_description('levels'::regclass, attnum) from pg_attribute "
+        "where attrelid = 'levels'::regclass and attname = 'rank'"
+    ).fetchone()[0]
+    assert "Higher rank wins" in comment
+
+
+@pytest.mark.parametrize("key", ["BKW", "b k w", "bkw_", "-bkw"])
+def test_scope_key_format(pg, key):
+    with pytest.raises(errors.CheckViolation):
+        pg.execute("insert into scopes (key, name) values (%s, 'n')", (key,))
+

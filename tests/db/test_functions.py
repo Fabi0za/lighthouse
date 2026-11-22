@@ -5,7 +5,7 @@ import json
 
 import pytest
 
-from tests.db.conftest import make_version, make_source
+from tests.db.conftest import make_reference_rows, make_source, make_version
 
 psycopg = pytest.importorskip("psycopg")
 from psycopg import errors
@@ -167,8 +167,8 @@ def test_search_excludes_pending(pg):
 
 def test_search_returns_source_fields_and_scopes(pg):
     a = make_source(pg, title="A")
-    pg.execute("insert into source_scopes values (%s, 'X'), (%s, 'Y')", (a, a))
-    b = make_source(pg, title="B")
+    pg.execute("insert into source_scopes values (%s, 'bkw'), (%s, 'ekz')", (a, a))
+    b = make_source(pg, title="B", level="national")
     for s in (a, b):
         d = make_version(pg, s, text_sha256="t-" + s)
         add_chunk(pg, d)
@@ -177,14 +177,14 @@ def test_search_returns_source_fields_and_scopes(pg):
     cols = [c.name for c in cur.description]
     rows = [dict(zip(cols, r)) for r in cur.fetchall()]
     for col in ("id", "version_id", "source_id", "content", "section_title", "page_number",
-                "chunk_index", "level", "authority_rank", "scopes", "token_count",
+                "chunk_index", "level", "rank", "scopes", "token_count",
                 "version_title"):
         assert col in cols, col
     by_source = {str(r["source_id"]): r for r in rows}
-    assert sorted(by_source[a]["scopes"]) == ["X", "Y"]
+    assert sorted(by_source[a]["scopes"]) == ["bkw", "ekz"]
     assert by_source[b]["scopes"] == []
-    assert by_source[a]["level"] == "operator"
-    assert by_source[a]["authority_rank"] == 2
+    assert (by_source[a]["level"], by_source[a]["rank"]) == ("operator", 2)
+    assert (by_source[b]["level"], by_source[b]["rank"]) == ("national", 1)
 
 
 # --- log_answer --------------------------------------------------------------
@@ -193,7 +193,7 @@ def test_log_answer_dedupes_versions(pg):
     s1, s2 = make_source(pg, title="A"), make_source(pg, title="B")
     d1 = make_version(pg, s1, status="current")
     d2 = make_version(pg, s2, status="current")
-    log = {"question": "q", "detected_filters": {}, "retrieved_chunks": [], "reranked_chunks": [],
+    log = {"question": "q", "detected_scope": None, "retrieved_chunks": [], "reranked_chunks": [],
            "llm_prompt": "p", "llm_response": "r", "formatted_answer": {}, "model_used": "m",
            "latency_ms": 12}
     ids = [d1, d1, d2, d1, d2, d2, d1, d1]
@@ -204,3 +204,28 @@ def test_log_answer_dedupes_versions(pg):
     assert {str(r[0]) for r in rows} == {d1, d2}
     stored = pg.execute("select question, latency_ms from answers where id = %s", (answer_id,)).fetchone()
     assert stored == ("q", 12)
+
+
+def _answer(scope):
+    return json.dumps({"question": "q", "llm_prompt": "p", "llm_response": "r",
+                       "model_used": "m", "latency_ms": 1, "detected_scope": scope})
+
+
+def test_detected_scope_is_stored(pg):
+    make_reference_rows(pg)
+    answer_id = pg.execute("select log_answer(%s::jsonb, '{}'::uuid[])", (_answer("bkw"),)).fetchone()[0]
+    stored = pg.execute("select detected_scope from answers where id = %s", (answer_id,)).fetchone()[0]
+    assert stored == "bkw"
+
+
+def test_detected_scope_is_a_reference(pg):
+    make_reference_rows(pg)
+    with pytest.raises(errors.ForeignKeyViolation):
+        pg.execute("select log_answer(%s::jsonb, '{}'::uuid[])", (_answer("x"),))
+
+
+def test_answers_have_no_detected_filters(pg):
+    cols = {r[0] for r in pg.execute(
+        "select column_name from information_schema.columns where table_name = 'answers'")}
+    assert "detected_scope" in cols and "detected_filters" not in cols
+
