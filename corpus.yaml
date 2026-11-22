@@ -1,16 +1,31 @@
-# Document corpus for Lighthouse: sources and their versions.
+# Document corpus for Lighthouse: levels, scopes, sources and their versions.
 # Paths are relative to the repo root. data/ itself is gitignored.
 #
-# A source is a watched publication; each entry under versions is one file of it,
-# listed OLDEST FIRST. The loader promotes them in order, so a later version retires
-# an earlier one. Versions are identified by content fingerprint, not by path.
-# A source's key never changes: publisher-publication, lowercase, no version or year.
+# levels: how authoritative a source is; higher rank wins where sources conflict.
+#   requires_scope: a source of this level must name at least one scope.
+# scopes: where a source applies (an operator's network). key is how a question names it.
 #
-# level: national | operator (rank 1 | 2 in the levels table; higher rank wins).
-# scopes: where the source applies; required for operator sources, none = applies everywhere.
-# watch_address: the address a person decided to watch for this source.
-# obtained_from: where the version was obtained; left out where not known.
-# Optional max_pages: load only the first N pages.
+# A source is a watched publication. Its key never changes: publisher-publication,
+# lowercase, no version or year. Running the loader is a person listing the source:
+# adding it, or changing its watch_address, stamps its confirmation date.
+#   scopes: none = applies everywhere.
+#   watch_address: the address a person decided to watch; left out where not known.
+#
+# Each entry under versions is one file of the source, listed OLDEST FIRST. The loader
+# promotes them in order, so a later version retires an earlier one. Versions are
+# identified by content fingerprint, not by path.
+#   title: as printed, without the version statement.
+#   label: the version statement as printed on the cover; left out where there is none.
+#   obtained_from: where the version was obtained; left out where not known.
+#   max_pages: load only the first N pages (recorded on the version as its page limit).
+
+levels:
+  - {key: national, rank: 1}
+  - {key: operator, rank: 2, requires_scope: true}
+
+scopes:
+  - {key: bkw, name: "BKW Energie AG"}
+  - {key: ekz, name: "Elektrizitätswerke des Kantons Zürich"}
 
 sources:
   # --- National (VSE industry recommendations) ---
@@ -18,19 +33,25 @@ sources:
     level: national
     versions:
       - path: "data/Werkvorschriften CH (WV - CH 2025).pdf"
-        title: "Werkvorschriften CH (WV – CH 2025): Technische Anschlussbedingungen (TAB)"
+        title: "Werkvorschriften CH: Technische Anschlussbedingungen (TAB)"
+        # Label taken from the file name: the cover parses as an image description.
+        label: "WV - CH 2025"
 
   - key: vse-na-eea-ne7
     level: national
     versions:
       - path: "data/NA:EEA-NE7 - CH 2025.pdf"
-        title: "NA/EEA-NE7 – CH 2025: Netzanschluss für Energieerzeugungsanlagen an das Niederspannungsnetz"
+        title: "NA/EEA-NE7: Netzanschluss für Energieerzeugungsanlagen an das Niederspannungsnetz"
+        # Label taken from the file name: the cover parses as an image description.
+        label: "NA/EEA-NE7 - CH 2025"
 
   - key: vse-nre
     level: national
     versions:
       - path: "data/Regelung der Einspeisung von Photovoltaikanlagen (NRE - CH 2025).pdf"
-        title: "NRE – CH 2025: Richtlinie für die netzdienliche Regelung der Einspeisung von Photovoltaikanlagen"
+        title: "NRE: Richtlinie für die netzdienliche Regelung der Einspeisung von Photovoltaikanlagen"
+        # Label taken from the file name: the cover parses as an image description.
+        label: "NRE - CH 2025"
 
   - key: vse-merkblatt-einspeiseregelung
     level: national
@@ -43,12 +64,15 @@ sources:
   - key: bkw-vorgaben-niederspannung
     level: operator
     scopes: [bkw]
+    watch_address: "https://www.bkw.ch/fileadmin/user_upload/03_Energie/03_04_Stromnetz/Netzanschluss/BKW_Fachpartner/20250521_DE_Vorgaben_BKW_V1.3.pdf"
     versions:
       - path: "data/BKW/DE_Vorgaben_BKW_V1.2.pdf"
-        title: "Vorgaben an Niederspannungs-Installationen im Verteilnetz der BKW (V1.2, gültig ab 01.03.2025)"
+        title: "Vorgaben an Niederspannungs-Installationen im Verteilnetz der BKW"
+        label: "Version: V1.2, Gültigkeit 1. März 2025"
         obtained_from: "https://www.bkw.ch/fileadmin/user_upload/03_Energie/03_04_Stromnetz/Netzanschluss/BKW_Fachpartner/DE_Vorgaben_BKW_V1.2.pdf"
       - path: "data/BKW/20250521_DE_Vorgaben_BKW_V1.3.pdf"
-        title: "Vorgaben an Niederspannungs-Installationen im Verteilnetz der BKW (V1.3, gültig ab 21.05.2025)"
+        title: "Vorgaben an Niederspannungs-Installationen im Verteilnetz der BKW"
+        label: "Version: V1.3, Gültig ab 21.05.2025"
         obtained_from: "https://www.bkw.ch/fileadmin/user_upload/03_Energie/03_04_Stromnetz/Netzanschluss/BKW_Fachpartner/20250521_DE_Vorgaben_BKW_V1.3.pdf"
 
   - key: bkw-notfallsteuerung
@@ -56,7 +80,8 @@ sources:
     scopes: [bkw]
     versions:
       - path: "data/BKW/Technische_Anforderungen_zwecks_Notfallsteuerung_DE.pdf"
-        title: "Technische Anforderungen zwecks Notfallsteuerung (V1.1, gültig ab 01.02.2025)"
+        title: "Technische Anforderungen zwecks Notfallsteuerung"
+        label: "Version: 1.1, Gültig ab: 01.02.2025"
 
   - key: bkw-faktenblatt-qu-regelung
     level: operator
@@ -71,7 +96,8 @@ sources:
     scopes: [bkw]
     versions:
       - path: "data/BKW/WV_BEJUSO_2025.pdf"
-        title: "Werkvorschriften (WV) TAB BE/JU/SO 2025"
+        title: "Werkvorschriften (WV) TAB BE/JU/SO"
+        label: "WV-BE/JU/SO 2025"
         max_pages: 4  # page 1 reads "Seite 1 von 4"; the rest reprints WV - CH 2025
 
   # --- Operator: EKZ ---
@@ -80,11 +106,13 @@ sources:
     scopes: [ekz]
     versions:
       - path: "data/EKZ/technische-bedingungen-fuer-den-parallelbetrieb-von-eea-fuer-internet-2026.pdf"
-        title: "Technische Bedingungen für den Parallelbetrieb von EEA und elektrischen Energiespeichern mit dem EKZ-Netz (Stand Januar 2026)"
+        title: "Technische Bedingungen für den Parallelbetrieb von EEA und elektrischen Energiespeichern mit dem EKZ-Netz"
+        label: "Stand: Januar 2026"
 
   - key: ekz-wv-spezielle-bestimmungen
     level: operator
     scopes: [ekz]
     versions:
       - path: "data/EKZ/wv-ch-2025-spezielle-bestimmungen-ekz-2026-01.pdf"
-        title: "Werkvorschriften CH 2025: Spezielle Bestimmungen der EKZ (Version April 2026)"
+        title: "Werkvorschriften CH 2025: Spezielle Bestimmungen der EKZ"
+        label: "Version: April 2026"

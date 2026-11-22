@@ -14,6 +14,7 @@ def mock_supabase():
     client.insert.return_value = client
     client.update.return_value = client
     client.delete.return_value = client
+    client.upsert.return_value = client
     client.eq.return_value = client
     client.execute.return_value = MagicMock(data=[{"id": str(uuid.uuid4()), "title": "Test"}])
     return client
@@ -165,3 +166,17 @@ def test_hold_version_writes_source_key(db, mock_supabase):
     assert mock_supabase.insert.call_args_list[0].args[0]["source_key"] == "s"
     assert mock_supabase.insert.call_args_list[1].args[0]["source_key"] == "s"
 
+
+
+def test_save_levels_upserts_on_key(db, mock_supabase):
+    rows = [{"key": "national", "rank": 1, "requires_scope": False}]
+    db.save_levels(rows)
+    mock_supabase.table.assert_called_with("levels")
+    mock_supabase.upsert.assert_called_once_with(rows, on_conflict="key")
+
+
+def test_save_scopes_upserts_on_key(db, mock_supabase):
+    rows = [{"key": "bkw", "name": "BKW Energie AG"}]
+    db.save_scopes(rows)
+    mock_supabase.table.assert_called_with("scopes")
+    mock_supabase.upsert.assert_called_once_with(rows, on_conflict="key")

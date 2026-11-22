@@ -36,9 +36,9 @@ from app.ingestion.parser import ReductoParser
 from app.ingestion.versions import cached_output, first_pages, load_version  # noqa: F401 - first_pages re-exported
 from app.models.database import DatabaseClient
 
-LEVELS = ("national", "operator")  # until corpus.yaml defines levels
 SOURCE_FIELDS = ("key", "level")
 KEY_FORMAT = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")  # as checked by the sources table
+WORD_KEY_FORMAT = re.compile(r"^[a-z]+(-[a-z]+)*$")   # as checked by the levels and scopes tables
 VERSION_FIELDS = ("path", "title")
 
 
@@ -52,6 +52,19 @@ class CorpusVersion:
 
 
 @dataclass
+class CorpusLevel:
+    key: str
+    rank: int
+    requires_scope: bool
+
+
+@dataclass
+class CorpusScope:
+    key: str
+    name: str
+
+
+@dataclass
 class CorpusSource:
     key: str
     level: str
@@ -60,10 +73,56 @@ class CorpusSource:
     versions: list[CorpusVersion] = field(default_factory=list)
 
 
-def load_corpus(corpus_path: Path, repo_root: Path) -> list[CorpusSource]:
+@dataclass
+class Corpus:
+    levels: list[CorpusLevel]
+    scopes: list[CorpusScope]
+    sources: list[CorpusSource]
+
+
+def _read_levels(raw_levels, problems: list[str]) -> list[CorpusLevel]:
+    levels: list[CorpusLevel] = []
+    ranks: set[int] = set()
+    for raw in raw_levels or []:
+        key, rank = raw.get("key"), raw.get("rank")
+        label = f"level {key}"
+        ok = True
+        if not key or not WORD_KEY_FORMAT.match(str(key)):
+            problems.append(f"{label}: key must be lowercase words joined by hyphens")
+            ok = False
+        if not isinstance(rank, int) or isinstance(rank, bool) or rank < 1:
+            problems.append(f"{label}: rank must be a positive integer")
+            ok = False
+        elif rank in ranks:
+            problems.append(f"{label}: rank {rank} used twice")
+            ok = False
+        if ok:
+            ranks.add(rank)
+            levels.append(CorpusLevel(key, rank, bool(raw.get("requires_scope", False))))
+    return levels
+
+
+def _read_scopes(raw_scopes, problems: list[str]) -> list[CorpusScope]:
+    scopes: list[CorpusScope] = []
+    for raw in raw_scopes or []:
+        key, name = raw.get("key"), raw.get("name")
+        label = f"scope {key}"
+        if not key or not WORD_KEY_FORMAT.match(str(key)):
+            problems.append(f"{label}: key must be lowercase words joined by hyphens")
+        elif not name:
+            problems.append(f"{label}: missing name")
+        else:
+            scopes.append(CorpusScope(key, name))
+    return scopes
+
+
+def load_corpus(corpus_path: Path, repo_root: Path) -> Corpus:
     """Read and validate corpus.yaml. Raises ValueError listing every problem found."""
     data = yaml.safe_load(corpus_path.read_text(encoding="utf-8")) or {}
     problems: list[str] = []
+    levels = {lv.key: lv for lv in _read_levels(data.get("levels"), problems)}
+    scopes = _read_scopes(data.get("scopes"), problems)
+    scope_keys = {sc.key for sc in scopes}
     sources: list[CorpusSource] = []
     seen_keys: set[str] = set()
     seen_paths: set[str] = set()
@@ -77,12 +136,17 @@ def load_corpus(corpus_path: Path, repo_root: Path) -> list[CorpusSource]:
         if not KEY_FORMAT.match(str(raw["key"])):
             problems.append(f"{label}: key must be lowercase letters and digits joined by hyphens")
             continue
-        if raw["level"] not in LEVELS:
-            problems.append(f"{label}: level must be one of {sorted(LEVELS)}")
+        level = levels.get(raw["level"])
+        if level is None:
+            problems.append(f"{label}: unknown level {raw['level']!r}")
+        source_scopes = list(raw.get("scopes") or [])
+        unknown = [sc for sc in source_scopes if sc not in scope_keys]
+        for sc in unknown:
+            problems.append(f"{label}: unknown scope {sc!r}")
+        if level is None or unknown:
             continue
-        scopes = list(raw.get("scopes") or [])
-        if raw["level"] == "operator" and not scopes:
-            problems.append(f"{label}: operator sources need scopes")
+        if level.requires_scope and not source_scopes:
+            problems.append(f"{label}: level {level.key!r} needs a scope")
             continue
         if raw["key"] in seen_keys:
             problems.append(f"{label}: source key listed twice")
@@ -117,13 +181,13 @@ def load_corpus(corpus_path: Path, repo_root: Path) -> list[CorpusSource]:
 
         seen_keys.add(raw["key"])
         sources.append(CorpusSource(
-            key=raw["key"], level=raw["level"], scopes=scopes,
+            key=raw["key"], level=raw["level"], scopes=source_scopes,
             watch_address=raw.get("watch_address") or None, versions=versions,
         ))
 
     if problems:
         raise ValueError("corpus.yaml has problems:\n  " + "\n  ".join(problems))
-    return sources
+    return Corpus(levels=list(levels.values()), scopes=scopes, sources=sources)
 
 
 def plan(
@@ -160,14 +224,37 @@ def report_source(stored: dict | None, s: CorpusSource) -> None:
         print(f"updated source {s.key!r}: " + "; ".join(notes))
 
 
-async def load_all(sources, repo_root, db, parser, chunker, embedder, load=None,
+async def load_all(corpus: Corpus, repo_root, db, parser, chunker, embedder, load=None,
                    parsed_cache: Path | None = None) -> dict[str, int]:
-    """Load every version in order. Returns a count per action, plus 'failed' and 'not attempted'."""
+    """Save levels, scopes and sources, then load every version in order.
+
+    Returns a count per action, plus 'failed' and 'not attempted'. Raises ValueError,
+    before writing anything, if the store holds a source that corpus.yaml no longer
+    lists: a renamed key would otherwise leave the old source current and searchable.
+    """
     load = load or load_version
+    listed = {s.key for s in corpus.sources}
+    unlisted = sorted(set(db.list_source_keys()) - listed)
+    if unlisted:
+        raise ValueError(
+            "stored sources not in corpus.yaml (a source key never changes; "
+            f"restore them in corpus.yaml): {', '.join(unlisted)}"
+        )
+    db.save_levels([{"key": lv.key, "rank": lv.rank, "requires_scope": lv.requires_scope}
+                    for lv in corpus.levels])
+    db.save_scopes([{"key": sc.key, "name": sc.name} for sc in corpus.scopes])
     counts: Counter[str] = Counter()
-    for s in sources:
-        report_source(db.find_source(s.key), s)
-        db.save_source(s.key, s.level, s.scopes, s.watch_address)
+    for s in corpus.sources:
+        stored = db.find_source(s.key)
+        try:
+            db.save_source(s.key, s.level, s.scopes, s.watch_address)
+        except Exception as e:  # noqa: BLE001 - report, then skip this source's versions
+            print(f"{s.key}: FAILED to save source: {type(e).__name__}: {e}")
+            counts["failed"] += 1
+            if s.versions:
+                counts["not attempted"] += len(s.versions)
+            continue
+        report_source(stored, s)
         for k, v in enumerate(s.versions):
             cached = cached_output(parsed_cache, file_sha256(repo_root / v.path))
             print(f"{v.path} ..." + (f" (parser output from cache: {cached.name})" if cached else ""),
@@ -205,7 +292,7 @@ async def main() -> int:
         corpus_path = repo_root / corpus_path
 
     try:
-        sources = load_corpus(corpus_path, repo_root)
+        corpus = load_corpus(corpus_path, repo_root)
     except ValueError as e:
         print(e)
         return 2
@@ -213,7 +300,7 @@ async def main() -> int:
     db = DatabaseClient()
     if args.dry_run:
         known = {d["file_sha256"] for d in db.list_versions() if d.get("status") != "pending"}
-        for s, v, action in plan(sources, known, repo_root, parsed_cache=args.parsed_cache):
+        for s, v, action in plan(corpus.sources, known, repo_root, parsed_cache=args.parsed_cache):
             pages = f", first {v.max_pages} pages" if v.max_pages else ""
             print(f"{action:5}  {v.path}  [{s.level}/{','.join(s.scopes) or '-'}{pages}]")
         return 0
@@ -227,8 +314,11 @@ async def main() -> int:
         dimensions=settings.embedding_dimensions,
     )
     try:
-        counts = await load_all(sources, repo_root, db, parser, chunker, embedder,
+        counts = await load_all(corpus, repo_root, db, parser, chunker, embedder,
                                 parsed_cache=args.parsed_cache)
+    except ValueError as e:
+        print(e)
+        return 2
     finally:
         await parser.close()
         await embedder.close()

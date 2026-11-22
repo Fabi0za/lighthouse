@@ -44,6 +44,14 @@ class DatabaseClient:
         rows = self.client.table("sources").select("key").execute().data
         return sorted(row["key"] for row in rows)
 
+    def save_levels(self, rows: list[dict[str, Any]]) -> None:
+        """Insert or update levels (key, rank, requires_scope)."""
+        self.client.table("levels").upsert(rows, on_conflict="key").execute()
+
+    def save_scopes(self, rows: list[dict[str, Any]]) -> None:
+        """Insert or update scopes (key, name)."""
+        self.client.table("scopes").upsert(rows, on_conflict="key").execute()
+
     def get_known_scopes(self) -> list[str]:
         """Keys of all defined scopes."""
         rows = self.client.table("scopes").select("key").execute().data

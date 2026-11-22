@@ -50,6 +50,7 @@ From the whole-branch review of the versioned store (Slice 1), deferred:
 - If marking a failed version as failed itself fails (database unreachable), that error hides the original one.
 - `eval_questions.required_source_docs` still holds document ids, which a reload invalidates.
 - The API has no authentication and is meant for local use only.
+- Covers that are images parse only as image descriptions, so a title or version statement printed there is not available as text (the three VSE recommendations; their labels in `corpus.yaml` come from the file names). This limits recognising a successor by its version statement.
 
 ## What the surrounding system must provide
 

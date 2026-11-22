@@ -20,6 +20,8 @@ Each entry: what changed and why, then the evidence. Measurements live in [basel
   Evidence: database tests: a new source is confirmed, the same address keeps the date across transactions, a new address gives a later date, `obtained_from` cannot be changed, promotion leaves the source untouched; 195 tests pass with the database tests.
 - **Versions record the title and version label as printed and the page limit they were loaded with; the prompt, citations and chunk header show title and label; `file_path` is gone.** The label was hand-written into the title, the page limit lived only in `corpus.yaml`, and the baseline script found versions by local path.
   Evidence: database tests for a positive page limit, immutable label and page limit, no `file_path` column, `match_chunks` returning the label; prompt, formatter and loader tests; 203 tests pass with the database tests.
+- **`corpus.yaml` defines levels, scopes and sources by key, with each version's printed title and label; the loader stops when the store holds a source that `corpus.yaml` no longer lists.** A renamed key would otherwise leave the old source current and searchable; unknown levels and scopes are reported by source before anything is written.
+  Evidence: loader tests for an unlisted stored key, unknown level and scope, a source the database refuses while others still load; the checked-in corpus parses to 10 sources and 11 versions with unchanged paths and addresses; 210 tests pass with the database tests.
 
 ## 2026-11-21
 
