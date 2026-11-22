@@ -88,6 +88,7 @@ python scripts/ask.py "Your question here"
 # report an unreachable address
 python scripts/flags.py list
 python scripts/flags.py approve VERSION_ID | reject VERSION_ID | confirm SOURCE_KEY
+python scripts/flags.py discard VERSION_ID | resolve FLAG_NUMBER   # give up a failed load; settle a failed check
 python scripts/flags.py raise-overdue [--max-age-days N]
 python scripts/flags.py report-unreachable SOURCE_KEY ADDRESS [--message TEXT]
 

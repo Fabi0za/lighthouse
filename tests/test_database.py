@@ -130,7 +130,18 @@ def test_fail_load_calls_rpc_and_returns_flag_number(db, mock_supabase):
 
 def test_discard_version_calls_rpc(db, mock_supabase):
     db.discard_version("v1")
-    mock_supabase.rpc.assert_called_once_with("discard_version", {"p_version_id": "v1"})
+    mock_supabase.rpc.assert_called_once_with("discard_version", {"p_version_id": "v1", "p_resolved_by": "system"})
+
+
+def test_resolve_check_calls_rpc(db, mock_supabase):
+    db.resolve_check(12)
+    mock_supabase.rpc.assert_called_once_with("resolve_check", {"p_flag_id": 12})
+
+
+def test_list_loading_versions(db, mock_supabase):
+    db.list_loading_versions()
+    mock_supabase.table.assert_called_with("versions")
+    mock_supabase.eq.assert_called_with("status", "loading")
 
 
 def test_promote_version_calls_rpc_and_returns_answer_count(db, mock_supabase):

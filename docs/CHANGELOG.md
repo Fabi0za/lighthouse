@@ -70,6 +70,8 @@ Each entry: what changed and why, then the evidence. Measurements live in [basel
   Evidence: a prompt test on the citation rule and a formatter test with the BKW label; per-answer label counts after re-running the baseline in `docs/baseline.md`; 452 tests pass with the database tests.
 - **A retried load may fingerprint its file again: taking up a failed or crashed version clears its text fingerprint and parsed output, which may change only while the version is loading; held, current and retired versions must have a fingerprint.** A retry that parsed the file to slightly different text was refused on every run and blocked the source's later versions (whole-branch review).
   Evidence: a real-database load that fails after the fingerprint and is retried with other text ends current with its flag resolved; checks for the fixed fingerprint past loading and for the required fingerprint; 462 tests pass with the database tests.
+- **A person can resolve every flag: `flags.py discard VERSION_ID` gives up a failed or stuck loading version (its flag resolved as rejected), `flags.py resolve FLAG_NUMBER` settles a failed check such as an unreachable address; `flags.py list` also shows versions still loading, with their age.** Unreachable flags had no resolver, a load failure only a successful retry, and a crashed load was invisible (whole-branch review).
+  Evidence: real-database tests for discarding by a person, resolving an unreachable flag, and refusing flags that hold a failed version, are not check failures, or are already resolved; script tests; 474 tests pass with the database tests.
 
 ## 2026-11-21
 

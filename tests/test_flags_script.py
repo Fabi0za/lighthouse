@@ -28,6 +28,7 @@ def test_list_prints_one_line_per_open_flag(capsys):
         {"id": 13, "source_key": "ekz-wv-spezielle-bestimmungen", "kind": "check_failed",
          "reason": "load_failed", "detail": {"file": "data/EKZ/wv.pdf"}, "versions": []},
     ]
+    db.list_loading_versions.return_value = []
     assert run(["list"], db) == 0
     out = capsys.readouterr().out.splitlines()
     assert out == [
@@ -40,6 +41,7 @@ def test_list_prints_one_line_per_open_flag(capsys):
 def test_list_says_when_nothing_is_open(capsys):
     db = MagicMock()
     db.list_open_flags.return_value = []
+    db.list_loading_versions.return_value = []
     run(["list"], db)
     assert capsys.readouterr().out.strip() == "no open flags"
 
@@ -79,3 +81,26 @@ def test_report_unreachable():
 def test_unknown_command_is_a_usage_error():
     with pytest.raises(SystemExit):
         run(["delete", "12"], MagicMock())
+
+
+def test_list_shows_loading_versions_with_their_age(capsys, monkeypatch):
+    from datetime import datetime, timedelta, timezone
+    db = MagicMock()
+    db.list_open_flags.return_value = []
+    started = (datetime.now(timezone.utc) - timedelta(hours=3, minutes=5)).isoformat()
+    db.list_loading_versions.return_value = [
+        {"id": "v9", "source_key": "ekz-parallelbetrieb-eea", "version_label": "Stand: Januar 2026",
+         "created_at": started}]
+    run(["list"], db)
+    out = capsys.readouterr().out.splitlines()
+    assert out == ["no open flags",
+                   "loading ekz-parallelbetrieb-eea (Stand: Januar 2026) v9 since 3 h 5 min"]
+
+
+def test_discard_and_resolve(capsys):
+    db = MagicMock()
+    run(["discard", "v9"], db)
+    run(["resolve", "14"], db)
+    db.discard_version.assert_called_once_with("v9", resolved_by="person")
+    db.resolve_check.assert_called_once_with(14)
+

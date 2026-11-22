@@ -117,9 +117,18 @@ class DatabaseClient:
             "p_version_id": str(version_id), "p_reason": reason, "p_file": file, "p_message": message,
         }).execute().data
 
-    def discard_version(self, version_id: str) -> None:
-        """Delete a loading or failed version that will not be kept."""
-        self.client.rpc("discard_version", {"p_version_id": str(version_id)}).execute()
+    def discard_version(self, version_id: str, resolved_by: str = "system") -> None:
+        """Delete a loading or failed version that will not be kept (by the system or a person)."""
+        self.client.rpc(
+            "discard_version", {"p_version_id": str(version_id), "p_resolved_by": resolved_by}
+        ).execute()
+
+    def list_loading_versions(self) -> list[dict[str, Any]]:
+        """Versions still loading: a load in progress, or one that crashed."""
+        return (
+            self.client.table("versions").select("id, source_key, version_label, created_at")
+            .eq("status", "loading").execute().data
+        )
 
     def promote_version(self, version_id: str, resolved_by: str = "system") -> int:
         """Make the version current; returns how many earlier answers saw the version it retired."""
@@ -149,6 +158,10 @@ class DatabaseClient:
     def approve_candidate(self, version_id: str) -> int:
         """A person approves a held candidate; returns how many answers saw the retired version."""
         return self.client.rpc("approve_candidate", {"p_version_id": str(version_id)}).execute().data
+
+    def resolve_check(self, flag_id: int) -> None:
+        """A person resolves an open check_failed flag that holds no failed version."""
+        self.client.rpc("resolve_check", {"p_flag_id": int(flag_id)}).execute()
 
     def raise_check_failed(self, source_key: str, address: str, message: str | None) -> int:
         """Report a watched address that cannot be reached; returns the flag number."""

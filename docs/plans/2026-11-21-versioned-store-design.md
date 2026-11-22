@@ -124,7 +124,8 @@ The only JSON columns are raw records nobody queries by content (rule 5), plus t
 
 **Checks and confirmation:**
 
-- `raise_check_failed` is what a monitor reports for an unreachable address.
+- `raise_check_failed` is what a monitor reports for an unreachable address; a person settles it with `resolve_check` once the address works again.
+- A person gives up a failed or stuck loading version with `discard_version(version, 'person')`, which resolves its flag as rejected. `scripts/flags.py list` shows versions still loading with their age, so a crashed load is never invisible.
 - `raise_overdue_flags(age)` flags each source not confirmed within the age, once per source.
 - `confirm_source` confirms a source and resolves its overdue flag (`resolve_overdue`).
 

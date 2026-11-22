@@ -291,3 +291,48 @@ def test_held_current_and_retired_need_a_fingerprint(pg, status):
     with pytest.raises(errors.CheckViolation):
         pg.execute("update versions set status = %s, retired_at = %s where id = %s",
                    (status, "2026-01-01" if status == "retired" else None, v))
+
+
+# --- a person resolves what the system cannot ------------------------------
+
+def test_person_discards_failed_version(pg):
+    s = make_source(pg)
+    v = begin(pg, s)
+    f = fail(pg, v)
+    pg.execute("select discard_version(%s, 'person')", (v,))
+    assert pg.execute("select count(*) from versions where id = %s", (v,)).fetchone()[0] == 0
+    flag = next(x for x in flags_of(pg, s) if x["id"] == f)
+    assert (flag["resolution"], flag["resolved_by"]) == ("rejected", "person")
+
+
+def test_resolve_unreachable_flag(pg):
+    s = make_source(pg)
+    n = pg.execute("select raise_check_failed(%s, 'https://example.org/gone.pdf', 'HTTP 404')", (s,)).fetchone()[0]
+    pg.execute("select resolve_check(%s)", (n,))
+    flag = next(x for x in flags_of(pg, s) if x["id"] == n)
+    assert (flag["resolution"], flag["resolved_by"]) == ("fixed", "person")
+
+
+def test_resolve_refuses_flag_holding_a_failed_version(pg):
+    s = make_source(pg)
+    f = fail(pg, begin(pg, s))
+    with pytest.raises(errors.RaiseException):
+        pg.execute("select resolve_check(%s)", (f,))
+
+
+@pytest.mark.parametrize("kind, reason, detail", [
+    ("candidate", "possible_successor", '{"address": "u"}'),
+    ("confirmation_overdue", "overdue", '{"address": null}')])
+def test_resolve_check_only_resolves_check_failed(pg, kind, reason, detail):
+    s = make_source(pg)
+    f = make_flag(pg, s, kind, reason, detail)
+    with pytest.raises(errors.RaiseException):
+        pg.execute("select resolve_check(%s)", (f,))
+
+
+def test_resolve_check_refuses_resolved_flag(pg):
+    s = make_source(pg)
+    n = pg.execute("select raise_check_failed(%s, 'u', null)", (s,)).fetchone()[0]
+    pg.execute("select resolve_check(%s)", (n,))
+    with pytest.raises(errors.RaiseException):
+        pg.execute("select resolve_check(%s)", (n,))

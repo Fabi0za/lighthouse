@@ -5,6 +5,8 @@ Usage:
     python scripts/flags.py approve VERSION_ID        # a held candidate becomes current
     python scripts/flags.py reject VERSION_ID         # a held candidate is retired
     python scripts/flags.py confirm SOURCE_KEY        # the source is still what is watched
+    python scripts/flags.py discard VERSION_ID        # give up a failed (or stuck loading) version
+    python scripts/flags.py resolve FLAG_NUMBER       # a failed check is settled (e.g. address back)
     python scripts/flags.py raise-overdue [--max-age-days N]
     python scripts/flags.py report-unreachable SOURCE_KEY ADDRESS [--message TEXT]
 
@@ -16,6 +18,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from datetime import datetime, timezone
 
 from app.config import get_settings
 from app.models.database import DatabaseClient
@@ -29,6 +32,8 @@ def _parser() -> argparse.ArgumentParser:
                         ("reject", "a held candidate is retired")):
         sub.add_parser(name, help=help_).add_argument("version_id")
     sub.add_parser("confirm", help="a person confirms the source").add_argument("source_key")
+    sub.add_parser("discard", help="give up a failed or stuck loading version").add_argument("version_id")
+    sub.add_parser("resolve", help="settle an open check_failed flag").add_argument("flag_number", type=int)
     overdue = sub.add_parser("raise-overdue", help="flag sources not confirmed for too long")
     overdue.add_argument("--max-age-days", type=int, default=None)
     unreachable = sub.add_parser("report-unreachable", help="a watched address cannot be reached")
@@ -50,6 +55,14 @@ def _line(flag: dict) -> str:
     return line
 
 
+def _age(created_at: str) -> str:
+    started = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+    minutes = int((datetime.now(timezone.utc) - started).total_seconds() // 60)
+    days, rest = divmod(minutes, 24 * 60)
+    hours, minutes = divmod(rest, 60)
+    return f"{days} d {hours} h" if days else f"{hours} h {minutes} min"
+
+
 def main(argv: list[str] | None = None, db=None, settings=None) -> int:
     args = _parser().parse_args(argv)
     db = db or DatabaseClient()
@@ -59,6 +72,8 @@ def main(argv: list[str] | None = None, db=None, settings=None) -> int:
             print(_line(flag))
         if not open_flags:
             print("no open flags")
+        for v in db.list_loading_versions():  # a load in progress, or one that crashed
+            print(f"loading {v['source_key']} ({v.get('version_label') or '-'}) {v['id']} since {_age(v['created_at'])}")
     elif args.command == "approve":
         seen = db.approve_candidate(args.version_id)
         print(f"approved {args.version_id}; the version it retired was seen by {seen} earlier answers"
@@ -66,6 +81,12 @@ def main(argv: list[str] | None = None, db=None, settings=None) -> int:
     elif args.command == "reject":
         db.reject_version(args.version_id)
         print(f"rejected {args.version_id}")
+    elif args.command == "discard":
+        db.discard_version(args.version_id, resolved_by="person")
+        print(f"discarded {args.version_id}")
+    elif args.command == "resolve":
+        db.resolve_check(args.flag_number)
+        print(f"flag #{args.flag_number} resolved")
     elif args.command == "confirm":
         db.confirm_source(args.source_key)
         print(f"confirmed {args.source_key}")

@@ -482,10 +482,10 @@ begin
     return v_flag;
 end $$;
 
--- Remove a loading or failed version that will not be kept (same text as another
--- version, or replaced by a newer file). Its flag, if open, is resolved: fixed by
--- the system, since a newer file took its place.
-create function discard_version(p_version_id uuid) returns void
+-- Remove a loading or failed version that will not be kept. By the system: same text as
+-- another version, or replaced by a newer file; its open flag is resolved as fixed. By a
+-- person (scripts/flags.py discard): the file is given up; the flag is resolved as rejected.
+create function discard_version(p_version_id uuid, p_resolved_by text default 'system') returns void
 language plpgsql as $$
 declare
     v versions;
@@ -500,7 +500,8 @@ begin
     end if;
     delete from chunks where version_id = p_version_id;
     delete from versions where id = p_version_id;
-    update flags set resolved_at = now(), resolution = 'fixed', resolved_by = 'system'
+    update flags set resolved_at = now(), resolved_by = p_resolved_by,
+                     resolution = case p_resolved_by when 'person' then 'rejected' else 'fixed' end
         where id = v.flag_id and resolved_at is null;
 end $$;
 
@@ -617,6 +618,27 @@ language sql as $$
                 jsonb_strip_nulls(jsonb_build_object('address', p_address, 'message', p_message)))
         returning id;
 $$;
+
+-- A person resolves a check that failed (e.g. an address that was unreachable is back).
+-- A load failure whose failed version still exists is resolved by retrying or discarding it.
+create function resolve_check(p_flag_id bigint) returns void
+language plpgsql as $$
+declare
+    f flags;
+begin
+    select * into f from flags where id = p_flag_id for update;
+    if not found then
+        raise exception 'flag % not found', p_flag_id;
+    end if;
+    if f.kind <> 'check_failed' or f.resolved_at is not null then
+        raise exception 'flag % is not an open check_failed flag', p_flag_id;
+    end if;
+    if exists (select 1 from versions where flag_id = p_flag_id and status = 'failed') then
+        raise exception 'flag % holds a failed version: retry the load or discard the version', p_flag_id;
+    end if;
+    update flags set resolved_at = now(), resolution = 'fixed', resolved_by = 'person'
+        where id = p_flag_id;
+end $$;
 
 -- Resolve a source's open overdue flag once a person has confirmed it.
 create function resolve_overdue(p_source_key text) returns void
