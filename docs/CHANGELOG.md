@@ -34,6 +34,8 @@ Each entry: what changed and why, then the evidence. Measurements live in [basel
   Evidence: `answers_that_saw` database tests (newest first, other versions named by label or title, empty for an unseen version); script tests; 308 tests pass with the database tests.
 - **When a load retires a version, the loader says how many earlier answers saw it.** Retiring a version is when those answers need a look; the count comes from the same transaction as the promotion.
   Evidence: real-database test (an answer that saw V1 gives 1 when V2 is promoted); a first version reports nothing; 312 tests pass with the database tests.
+- **`scripts/flags.py` lists open flags and lets a person approve or reject a candidate, confirm a source, raise overdue flags (age from `CONFIRMATION_MAX_AGE_DAYS`, default 180, or `--max-age-days`), and report an unreachable address.** Every flag function needs a caller; this is a command line, not a review screen.
+  Evidence: script tests for each subcommand, including the setting and its override; config tests for the default and an override; 322 tests pass with the database tests.
 
 ## 2026-11-21
 

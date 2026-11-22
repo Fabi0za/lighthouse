@@ -20,3 +20,15 @@ def test_minimal_env_is_accepted(tmp_path):
     env = tmp_path / ".env"
     env.write_text(REQUIRED, encoding="utf-8")
     assert isinstance(Settings(_env_file=env), Settings)
+
+
+def test_confirmation_age_defaults_to_180_days(tmp_path):
+    env = tmp_path / ".env"
+    env.write_text(REQUIRED, encoding="utf-8")
+    assert Settings(_env_file=env).confirmation_max_age_days == 180
+
+
+def test_confirmation_age_can_be_set(tmp_path):
+    env = tmp_path / ".env"
+    env.write_text(REQUIRED + "CONFIRMATION_MAX_AGE_DAYS=90\n", encoding="utf-8")
+    assert Settings(_env_file=env).confirmation_max_age_days == 90

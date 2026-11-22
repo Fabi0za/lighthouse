@@ -16,6 +16,8 @@ def mock_supabase():
     client.delete.return_value = client
     client.upsert.return_value = client
     client.eq.return_value = client
+    client.is_.return_value = client
+    client.order.return_value = client
     client.execute.return_value = MagicMock(data=[{"id": str(uuid.uuid4()), "title": "Test"}])
     return client
 
@@ -190,3 +192,13 @@ def test_answers_that_saw_calls_rpc(db, mock_supabase):
     _rpc_returns(mock_supabase, [{"answer_id": "a"}])
     assert db.answers_that_saw("v1") == [{"answer_id": "a"}]
     mock_supabase.rpc.assert_called_once_with("answers_that_saw", {"p_version_id": "v1"})
+
+
+def test_list_open_flags_with_held_versions(db, mock_supabase):
+    mock_supabase.execute.return_value = MagicMock(data=[{"id": 1}])
+    assert db.list_open_flags() == [{"id": 1}]
+    mock_supabase.table.assert_called_with("flags")
+    mock_supabase.select.assert_called_with("*, versions(id)")
+    mock_supabase.is_.assert_called_with("resolved_at", "null")
+    mock_supabase.order.assert_called_with("id")
+

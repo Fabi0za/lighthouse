@@ -117,6 +117,13 @@ class DatabaseClient:
 
     # --- flags a person handles -------------------------------------------
 
+    def list_open_flags(self) -> list[dict[str, Any]]:
+        """Open flags by number, each with the version it holds, if any."""
+        return (
+            self.client.table("flags").select("*, versions(id)")
+            .is_("resolved_at", "null").order("id").execute().data
+        )
+
     def hold_candidate(self, version_id: str, address: str, message: str | None) -> int:
         """Hold a loaded version for a person under a candidate flag; returns the flag number."""
         return self.client.rpc("hold_candidate", {
