@@ -236,7 +236,7 @@ async def test_load_all_saves_references_and_sources_and_loads_versions_in_order
                         max_pages=None, parsed_cache=None, listed_path=None):
         assert listed_path == file.name  # the path as written in corpus.yaml (relative to tmp_path)
         calls.append((source_key, file.name, version_label, max_pages))
-        return "promoted", "d"
+        return "promoted", "d", None
 
     counts = await lc.load_all(corpus, tmp_path, db, None, None, None, load=fake_load)
 
@@ -277,7 +277,7 @@ async def test_source_the_database_refuses_is_reported_and_others_still_load(tmp
 
     async def fake_load(db_, source_key, file, *rest, **kwargs):
         loaded.append(file.name)
-        return "promoted", "d"
+        return "promoted", "d", None
 
     counts = await lc.load_all(corpus, tmp_path, db, None, None, None, load=fake_load)
 
@@ -296,7 +296,7 @@ async def test_load_all_stops_a_source_after_a_failure(tmp_path):
         loaded.append(file.name)
         if file.name == "v1.pdf":
             raise RuntimeError("boom")
-        return "promoted", "d"
+        return "promoted", "d", None
 
     counts = await lc.load_all(corpus, tmp_path, _db(), None, None, None, load=fake_load)
 
@@ -313,7 +313,7 @@ sources:
 async def test_load_all_uses_real_load_version_by_default(tmp_path, monkeypatch):
     _pdf(tmp_path / "a.pdf")
     corpus = lc.load_corpus(_corpus(tmp_path, ONE_SOURCE), tmp_path)
-    fake = AsyncMock(return_value=("skipped", "d"))
+    fake = AsyncMock(return_value=("skipped", "d", None))
     monkeypatch.setattr(lc, "load_version", fake)
     assert await lc.load_all(corpus, tmp_path, _db(), None, None, None) == {"skipped": 1}
     fake.assert_awaited_once()
@@ -326,14 +326,14 @@ async def test_load_all_passes_cache_through(tmp_path):
 
     async def fake_load(*args, parsed_cache=None, **kwargs):
         seen["cache"] = parsed_cache
-        return "promoted", "d"
+        return "promoted", "d", None
 
     await lc.load_all(corpus, tmp_path, _db(), None, None, None, load=fake_load, parsed_cache=tmp_path)
     assert seen["cache"] == tmp_path
 
 
 async def _noop_load(*a, **k):
-    return "skipped", "d"
+    return "skipped", "d", None
 
 
 async def test_load_all_reports_changed_level_scopes_and_address(tmp_path, capsys):
@@ -350,3 +350,18 @@ async def test_load_all_reports_changed_level_scopes_and_address(tmp_path, capsy
     assert "level 'national' -> 'operator'" in out
     assert "scopes ['x'] -> ['x', 'y']" in out
     assert "watch address None -> 'https://example.org/op.pdf' (reconfirmed)" in out
+
+
+async def test_load_all_says_how_many_answers_saw_the_retired_version(tmp_path, capsys):
+    _files(tmp_path)
+    corpus = lc.load_corpus(_corpus(tmp_path, GOOD), tmp_path)
+    seen = iter([None, None, 3])  # a.pdf and v1.pdf retire nothing; v2.pdf retires v1
+
+    async def fake_load(*args, **kwargs):
+        return "promoted", "d", next(seen)
+
+    await lc.load_all(corpus, tmp_path, _db(), None, None, None, load=fake_load)
+    out = capsys.readouterr().out
+    assert out.count("seen by") == 1
+    assert "the version it retired was seen by 3 earlier answers" in out
+

@@ -260,7 +260,7 @@ async def load_all(corpus: Corpus, repo_root, db, parser, chunker, embedder, loa
             print(f"{v.path} ..." + (f" (parser output from cache: {cached.name})" if cached else ""),
                   flush=True)
             try:
-                action, doc_id = await load(
+                action, doc_id, retired_seen_by = await load(
                     db, s.key, repo_root / v.path, v.title, v.obtained_from,
                     parser, chunker, embedder, version_label=v.label, max_pages=v.max_pages,
                     listed_path=v.path,
@@ -275,6 +275,9 @@ async def load_all(corpus: Corpus, repo_root, db, parser, chunker, embedder, loa
                     counts["not attempted"] += rest
                 break
             print(f"  {action} ({doc_id})")
+            if retired_seen_by is not None:
+                print(f"  the version it retired was seen by {retired_seen_by} earlier answers"
+                      + (" (scripts/answers.py saw lists them)" if retired_seen_by else ""))
             counts[action] += 1
     return dict(counts)
 

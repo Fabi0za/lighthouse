@@ -47,7 +47,7 @@ async def test_new_file_promoted(tmp_path):
     f = _pdf(tmp_path / "v2.pdf")
     db, parser, chunker, embedder = _deps()
 
-    action, doc_id = await load_version(db, SOURCE, f, "Doc", "https://example.org/v2.pdf",
+    action, doc_id, _ = await load_version(db, SOURCE, f, "Doc", "https://example.org/v2.pdf",
                                         parser, chunker, embedder, version_label="V2")
 
     assert (action, doc_id) == ("promoted", "new-doc")
@@ -65,7 +65,7 @@ async def test_same_bytes_skipped(tmp_path):
     existing = [{"id": "old", "status": "current", "file_sha256": file_sha256(f), "text_sha256": "t"}]
     db, parser, chunker, embedder = _deps(existing)
 
-    assert await load_version(db, SOURCE, f, "Doc", None, parser, chunker, embedder) == ("skipped", "old")
+    assert await load_version(db, SOURCE, f, "Doc", None, parser, chunker, embedder) == ("skipped", "old", None)
     db.begin_load.assert_not_called()
 
 
@@ -74,7 +74,7 @@ async def test_same_bytes_as_retired_version_skipped(tmp_path):
     existing = [{"id": "old", "status": "retired", "file_sha256": file_sha256(f), "text_sha256": "t"}]
     db, parser, chunker, embedder = _deps(existing)
 
-    assert await load_version(db, SOURCE, f, "Doc", None, parser, chunker, embedder) == ("skipped", "old")
+    assert await load_version(db, SOURCE, f, "Doc", None, parser, chunker, embedder) == ("skipped", "old", None)
 
 
 async def test_same_text_new_bytes_is_dismissed(tmp_path):
@@ -83,7 +83,7 @@ async def test_same_text_new_bytes_is_dismissed(tmp_path):
                  "text_sha256": text_sha256(SECTIONS)}]
     db, parser, chunker, embedder = _deps(existing)
 
-    action, doc_id = await load_version(db, SOURCE, f, "Doc", None, parser, chunker, embedder)
+    action, doc_id, _ = await load_version(db, SOURCE, f, "Doc", None, parser, chunker, embedder)
 
     assert (action, doc_id) == ("dismissed", "old")
     db.discard_version.assert_called_once_with("new-doc")
@@ -153,7 +153,7 @@ async def test_cache_hit_uses_cached_output_instead_of_parser(tmp_path):
     db, parser, chunker, embedder = _deps(pages_seen=pages_seen)
     parser._extract_sections = MagicMock(return_value=SECTIONS)
 
-    action, _ = await load_version(db, SOURCE, f, "Doc", None, parser, chunker, embedder,
+    action, _, _ = await load_version(db, SOURCE, f, "Doc", None, parser, chunker, embedder,
                                    max_pages=4, parsed_cache=cache)
 
     assert action == "promoted"
@@ -190,7 +190,7 @@ async def test_unfinished_version_with_same_text_but_other_bytes_is_discarded(tm
                  "text_sha256": text_sha256(SECTIONS)}]
     db, parser, chunker, embedder = _deps(existing)
 
-    action, doc_id = await load_version(db, SOURCE, f, "Doc", None, parser, chunker, embedder)
+    action, doc_id, _ = await load_version(db, SOURCE, f, "Doc", None, parser, chunker, embedder)
 
     assert (action, doc_id) == ("promoted", "new-doc")
     db.discard_version.assert_called_once_with("stale")
@@ -210,7 +210,7 @@ async def test_unfinished_version_with_same_bytes_is_taken_up_again(tmp_path, st
     existing = [{"id": "new-doc", "status": status, "file_sha256": file_sha256(f), "text_sha256": None}]
     db, parser, chunker, embedder = _deps(existing)
 
-    action, doc_id = await load_version(db, SOURCE, f, "Doc", None, parser, chunker, embedder)
+    action, doc_id, _ = await load_version(db, SOURCE, f, "Doc", None, parser, chunker, embedder)
 
     assert (action, doc_id) == ("promoted", "new-doc")
     db.begin_load.assert_called_once()
@@ -240,4 +240,20 @@ async def test_later_error_is_load_failed(tmp_path):
 
     db.fail_load.assert_called_once_with("new-doc", "load_failed", "v2.pdf", "RuntimeError: rate limit")
     db.promote_version.assert_not_called()
+
+
+async def test_first_version_retires_nothing(tmp_path):
+    f = _pdf(tmp_path / "v1.pdf")
+    db, parser, chunker, embedder = _deps()
+    result = await load_version(db, SOURCE, f, "Doc", None, parser, chunker, embedder)
+    assert result.retired_seen_by is None
+
+
+async def test_promotion_reports_answers_that_saw_the_retired_version(tmp_path):
+    f = _pdf(tmp_path / "v2.pdf")
+    existing = [{"id": "old", "status": "current", "file_sha256": "other-bytes", "text_sha256": "other-text"}]
+    db, parser, chunker, embedder = _deps(existing)
+    db.promote_version.return_value = 2
+    result = await load_version(db, SOURCE, f, "Doc", None, parser, chunker, embedder)
+    assert (result.action, result.version_id, result.retired_seen_by) == ("promoted", "new-doc", 2)
 

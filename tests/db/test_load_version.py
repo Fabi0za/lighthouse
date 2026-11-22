@@ -112,7 +112,7 @@ def source(db):
 
 
 async def test_routine_load_raises_no_flag(db, source, tmp_path):
-    action, _ = await load_version(db, source, _pdf(tmp_path / "a.pdf", 200), "Doc", None, *_deps())
+    action, _, _ = await load_version(db, source, _pdf(tmp_path / "a.pdf", 200), "Doc", None, *_deps())
     assert action == "promoted"
     assert _statuses(db.c, source) == ["current"]
     assert _flags(db.c, source) == []
@@ -120,7 +120,7 @@ async def test_routine_load_raises_no_flag(db, source, tmp_path):
 
 async def test_repackaged_file_leaves_no_row_and_no_flag(db, source, tmp_path):
     await load_version(db, source, _pdf(tmp_path / "a.pdf", 200), "Doc", None, *_deps())
-    action, _ = await load_version(db, source, _pdf(tmp_path / "b.pdf", 300), "Doc", None, *_deps())
+    action, _, _ = await load_version(db, source, _pdf(tmp_path / "b.pdf", 300), "Doc", None, *_deps())
     assert action == "dismissed"
     assert _statuses(db.c, source) == ["current"]
     assert _flags(db.c, source) == []
@@ -143,7 +143,7 @@ async def test_failed_embedding_raises_load_failed_then_retry_fixes_it(db, sourc
     assert _statuses(db.c, source) == ["failed"]
     assert [x["reason"] for x in _flags(db.c, source)] == ["load_failed"]
 
-    action, _ = await load_version(db, source, f, "Doc", None, *_deps())
+    action, _, _ = await load_version(db, source, f, "Doc", None, *_deps())
 
     assert action == "promoted"
     assert _statuses(db.c, source) == ["current"]
@@ -155,7 +155,7 @@ async def test_failed_version_replaced_by_other_bytes_with_same_text(db, source,
     with pytest.raises(RuntimeError):
         await load_version(db, source, _pdf(tmp_path / "a.pdf", 200), "Doc", None, *_deps(fail_embedding=True))
 
-    action, _ = await load_version(db, source, _pdf(tmp_path / "b.pdf", 300), "Doc", None, *_deps())
+    action, _, _ = await load_version(db, source, _pdf(tmp_path / "b.pdf", 300), "Doc", None, *_deps())
 
     assert action == "promoted"
     assert _statuses(db.c, source) == ["current"]
@@ -168,8 +168,22 @@ async def test_crash_while_loading_is_resumed(db, source, tmp_path):
     from app.ingestion.fingerprint import file_sha256
     db.begin_load(source, "Doc", None, None, None, file_sha256(f))  # then the process died
 
-    action, _ = await load_version(db, source, f, "Doc", None, *_deps())
+    action, _, _ = await load_version(db, source, f, "Doc", None, *_deps())
 
     assert action == "promoted"
     assert _statuses(db.c, source) == ["current"]
     assert _flags(db.c, source) == []
+
+
+async def test_second_version_reports_answers_that_saw_the_first(db, source, tmp_path):
+    _, v1, _ = await load_version(db, source, _pdf(tmp_path / "a.pdf", 200), "Doc", None, *_deps())
+    db.c.execute("select log_answer(%s::jsonb, %s::uuid[])", (json.dumps(
+        {"question": "q", "llm_prompt": "p", "llm_response": "r", "model_used": "m", "latency_ms": 1}), [v1]))
+    db.c.commit()
+    parser, chunker, embedder = _deps()
+    parser.parse_pdf = AsyncMock(return_value=({"result": {}}, [{"title": "S", "content": "neu", "page": 1}]))
+
+    result = await load_version(db, source, _pdf(tmp_path / "b.pdf", 300), "Doc", None, parser, chunker, embedder)
+
+    assert (result.action, result.retired_seen_by) == ("promoted", 1)
+

@@ -7,7 +7,7 @@ from __future__ import annotations
 import json
 import tempfile
 from pathlib import Path
-from typing import Any
+from typing import NamedTuple
 
 from pypdf import PdfReader, PdfWriter
 
@@ -38,6 +38,12 @@ def cached_output(parsed_cache: Path | None, file_hash: str) -> Path | None:
 UNFINISHED = ("loading", "failed")
 
 
+class LoadResult(NamedTuple):
+    action: str                  # skipped, dismissed or promoted
+    version_id: str
+    retired_seen_by: int | None  # answers that saw the version this one retired; None if none was retired
+
+
 async def load_version(
     db,
     source_key: str,
@@ -52,8 +58,8 @@ async def load_version(
     max_pages: int | None = None,
     parsed_cache: Path | None = None,
     listed_path: str | None = None,
-) -> tuple[str, str]:
-    """Load file as a version of the source with source_key. Returns (action, version_id).
+) -> LoadResult:
+    """Load file as a version of the source with source_key.
 
     action is "skipped" (these bytes are already a version), "dismissed" (new bytes,
     same text: repackaging) or "promoted" (new content, now current). A routine load
@@ -72,7 +78,7 @@ async def load_version(
     versions = db.list_versions(source_key)
     for v in versions:
         if v.get("file_sha256") == file_hash and v.get("status") not in UNFINISHED:
-            return "skipped", v["id"]
+            return LoadResult("skipped", v["id"], None)
 
     version_id = db.begin_load(source_key, title, version_label, obtained_from, max_pages, file_hash)
     others = [v for v in versions if str(v["id"]) != str(version_id)]
@@ -96,7 +102,7 @@ async def load_version(
                 db.discard_version(v["id"])  # an earlier, unfinished load of other bytes
                 continue
             db.discard_version(version_id)
-            return "dismissed", v["id"]
+            return LoadResult("dismissed", v["id"], None)
         db.set_text_fingerprint(version_id, text_hash, raw_output)
 
         chunks = chunker.chunk_sections(sections, doc_title=display_title(title, version_label))
@@ -115,8 +121,9 @@ async def load_version(
             }
             for i, c in enumerate(chunks)
         ])
-        db.promote_version(version_id)
+        seen = db.promote_version(version_id)
     except Exception as e:
         db.fail_load(version_id, reason, listed_path or file.name, f"{type(e).__name__}: {e}")
         raise
-    return "promoted", version_id
+    replaced_one = any(v.get("status") == "current" for v in others)
+    return LoadResult("promoted", version_id, seen if replaced_one else None)
