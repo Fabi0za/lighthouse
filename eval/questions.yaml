@@ -1,0 +1,41 @@
+# Eval questions for Lighthouse. Format: see scripts/load_eval_questions.py.
+# Load with: python scripts/load_eval_questions.py
+#
+# Facts are worded from the version named under sources (here BKW Vorgaben V1.3,
+# section 4 "Steuern oder Sperren von Anlagen"), one fact per row. The answer is
+# correct for V1.3; V1.2 said only that new installations are no longer controlled
+# or blocked (docs/baseline.md).
+
+questions:
+  - key: bkw-steuerloesungen-vorbereiten
+    question: "Was muss bei Neuinstallationen im Netz der BKW für Steuerlösungen vorbereitet werden?"
+    question_type: answerable
+    case_type: changed_between_versions
+    expected_answer: >-
+      Neue Anlagen werden nicht mehr mit Tonfrequenz-Rundsteuerempfängern gesteuert oder gesperrt.
+      Jede Schaltgerätekombination mit Messeinrichtung und Steuerapparaten muss mindestens einen
+      Reserve-Montageplatz für Steuerlösungen der BKW (z.B. TRE, Notfallsteuerung) inklusive
+      Steuer-Überstromunterbrecher enthalten; der Steuer-Überstromunterbrecher ist gemäss
+      Werkvorschriften vorzubereiten. Steuer-Aussenleiter (Nr. 1) und Steuer-Neutralleiter (Nr. 0)
+      sind auf plombierbare Klemmen in der Schaltgerätekombination zu führen. Auf das Vorbereiten
+      des Doppeltarif-Drahts (Nr. 2) kann verzichtet werden.
+    sources:
+      - {source_key: bkw-vorgaben-niederspannung, version_label: "Version: V1.3, Gültig ab 21.05.2025"}
+    facts:
+      - "Neue Anlagen werden nicht mehr mittels Tonfrequenz-Rundsteuerempfänger gesteuert oder gesperrt."
+      - "Jede Schaltgerätekombination mit Messeinrichtung und Steuerapparaten braucht mindestens einen Reserve-Montageplatz für Steuerlösungen der BKW inklusive Steuer-Überstromunterbrecher."
+      - "Steuer-Aussenleiter (Nr. 1) und Steuer-Neutralleiter (Nr. 0) sind auf plombierbare Klemmen zu führen."
+      - "Auf das Vorbereiten des Doppeltarif-Drahts (Nr. 2) kann verzichtet werden."
+
+  - key: bkw-steuerdraht-2-doppeltarif
+    question: "Muss bei Neuinstallationen im Netz der BKW ein Steuerdraht 2 für den Doppeltarif vorgesehen werden?"
+    question_type: answerable
+    case_type: changed_between_versions
+    expected_answer: >-
+      Nein. Gemäss den Vorgaben V1.3 kann auf das Vorbereiten des Doppeltarif-Drahts (Nr. 2)
+      verzichtet werden. Vorzubereiten sind hingegen der Steuer-Aussenleiter (Nr. 1) und der
+      Steuer-Neutralleiter (Nr. 0) auf plombierbaren Klemmen.
+    sources:
+      - {source_key: bkw-vorgaben-niederspannung, version_label: "Version: V1.3, Gültig ab 21.05.2025"}
+    facts:
+      - "Auf das Vorbereiten des Doppeltarif-Drahts (Nr. 2) kann verzichtet werden; er muss nicht vorgesehen werden."

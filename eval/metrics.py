@@ -62,15 +62,15 @@ async def answer_correctness(
     question: str,
     generated_answer: str,
     expected_answer: str,
-    required_facts: list[str],
+    facts: list[str],
     anthropic_api_key: str,
     model: str,
 ) -> dict[str, Any]:
     """Use LLM-as-judge to check if required facts are present in the answer."""
-    if not required_facts:
+    if not facts:
         return {"score": 1.0, "details": []}
 
-    facts_list = "\n".join(f"- {fact}" for fact in required_facts)
+    facts_list = "\n".join(f"- {fact}" for fact in facts)
     prompt = JUDGE_PROMPT.format(
         question=question,
         expected_answer=expected_answer,
@@ -95,7 +95,7 @@ async def answer_correctness(
 
     details = [r.model_dump() for r in response.parsed_output.results]
     present_count = sum(1 for d in details if d.get("present"))
-    score = present_count / len(required_facts)
+    score = present_count / len(facts)
 
     return {"score": score, "details": details}
 

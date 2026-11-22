@@ -210,3 +210,33 @@ def test_recall_out_of_range_refused(pg, recall):
     with pytest.raises(errors.CheckViolation):
         record(pg, [_result(q, _answer(pg), recall=recall)])
 
+
+
+# --- saving questions --------------------------------------------------------
+
+def save(conn, key="q", question="Q?", facts=("a", "b"), sources=(), expected="A."):
+    payload = {"key": key, "question": question, "question_type": "answerable", "case_type": "standard",
+               "expected_answer": expected, "facts": list(facts),
+               "sources": [{"source_key": s, "written_from_text_sha256": h} for s, h in sources]}
+    conn.execute("select save_eval_question(%s::jsonb)", (json.dumps(payload),))
+
+
+def test_save_eval_question_replaces_sources_and_facts(pg):
+    s = make_source(pg)
+    make_version(pg, s, status="retired", retired_at="2026-01-01", text_sha256="t12")
+    make_version(pg, s, status="current", text_sha256="t13")
+    save(pg, facts=("a", "b"), sources=[(s, "t12")])
+    save(pg, facts=("c",), sources=[(s, "t13")], expected="B.")
+    assert pg.execute("select position, text from eval_question_facts where question_key = 'q'").fetchall() == [
+        (1, "c")]
+    assert pg.execute("select written_from_text_sha256 from eval_question_sources").fetchall() == [("t13",)]
+    assert pg.execute("select expected_answer from eval_questions where key = 'q'").fetchone()[0] == "B."
+
+
+def test_facts_and_question_fixed_once_results_exist(pg):
+    save(pg, facts=("a", "b"))
+    record(pg, [_result("q", _answer(pg), 1.0, facts=[{"position": 1, "present": True, "reason": "r"}])])
+    save(pg, facts=("a", "b"), expected="New expected answer.")  # unchanged facts: allowed
+    for changed in ({"facts": ("a", "c")}, {"question": "Other?"}):
+        with pytest.raises(errors.RaiseException), pg.transaction():
+            save(pg, **changed)

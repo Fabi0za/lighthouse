@@ -219,6 +219,10 @@ class DatabaseClient:
             questions.append(q)
         return questions
 
+    def save_eval_question(self, question: dict[str, Any]) -> None:
+        """Insert or update an eval question with its sources and facts, in one transaction."""
+        self.client.rpc("save_eval_question", {"p_question": question}).execute()
+
     def record_eval_run(self, run: dict[str, Any]) -> str:
         """Store a run with all its results, in one transaction. Returns the run id."""
         return self.client.rpc("record_eval_run", {"p_run": run}).execute().data

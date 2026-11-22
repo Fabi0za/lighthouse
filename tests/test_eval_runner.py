@@ -151,7 +151,7 @@ async def test_answer_correctness_parses_judge_response():
             question="How do I wire X?",
             generated_answer="Wire X to terminal Y.",
             expected_answer="Wire X to terminal Y.",
-            required_facts=["terminal Y"],
+            facts=["terminal Y"],
             anthropic_api_key="test-key",
             model="claude-haiku-5-5",
         )
@@ -176,7 +176,7 @@ async def test_answer_correctness_partial_score():
             question="Test?",
             generated_answer="Only fact A here.",
             expected_answer="Both fact A and fact B.",
-            required_facts=["fact A", "fact B"],
+            facts=["fact A", "fact B"],
             anthropic_api_key="test-key",
             model="claude-haiku-5-5",
         )

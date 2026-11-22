@@ -708,6 +708,44 @@ language sql stable as $$
     order by a.created_at desc;
 $$;
 
+-- Insert or update an eval question with its sources and facts, in one transaction.
+-- p_question: {key, question, question_type, case_type, expected_answer,
+--              sources: [{source_key, written_from_text_sha256}], facts: [text, ...]}
+-- Once a question has eval results, its question text and facts are fixed (earlier fact
+-- verdicts refer to them): changing them needs a new key. Sources, expected answer and
+-- types may change, e.g. after a review against a newer version.
+create function save_eval_question(p_question jsonb) returns void
+language plpgsql as $$
+declare
+    k text := p_question->>'key';
+    v_facts text[] := array(select jsonb_array_elements_text(coalesce(p_question->'facts', '[]')));
+    old_facts text[];
+    old_question text;
+begin
+    select question into old_question from eval_questions where key = k;
+    old_facts := array(select text from eval_question_facts where question_key = k order by position);
+    if exists (select 1 from eval_results where question_key = k)
+       and (old_question is distinct from p_question->>'question' or old_facts is distinct from v_facts) then
+        raise exception 'eval question % has results: its question and facts cannot change; use a new key', k;
+    end if;
+
+    insert into eval_questions (key, question, question_type, case_type, expected_answer)
+        values (k, p_question->>'question', p_question->>'question_type', p_question->>'case_type',
+                p_question->>'expected_answer')
+        on conflict (key) do update set question = excluded.question,
+            question_type = excluded.question_type, case_type = excluded.case_type,
+            expected_answer = excluded.expected_answer;
+    delete from eval_question_sources where question_key = k;
+    insert into eval_question_sources (question_key, source_key, written_from_text_sha256)
+        select k, s->>'source_key', s->>'written_from_text_sha256'
+        from jsonb_array_elements(coalesce(p_question->'sources', '[]')) as s;
+    if old_facts is distinct from v_facts then
+        delete from eval_question_facts where question_key = k;
+        insert into eval_question_facts (question_key, position, text)
+            select k, n, f from unnest(v_facts) with ordinality as x(f, n);
+    end if;
+end $$;
+
 -- Store an eval run with all its results and fact results, in one transaction.
 -- p_run: {indexing_settings_key, answer_settings_key, judge_model, notes,
 --         results: [{question_key, answer_id, refusal_correct, retrieval_recall,
@@ -829,3 +867,4 @@ revoke execute on function raise_overdue_flags(interval) from public, anon, auth
 revoke execute on function log_answer(jsonb, uuid[]) from public, anon, authenticated;
 revoke execute on function save_source(text, text, text[], text) from public, anon, authenticated;
 revoke execute on function record_eval_run(jsonb) from public, anon, authenticated;
+revoke execute on function save_eval_question(jsonb) from public, anon, authenticated;

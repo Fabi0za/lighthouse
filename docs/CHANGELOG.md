@@ -50,6 +50,8 @@ Each entry: what changed and why, then the evidence. Measurements live in [basel
   Evidence: embedder tests: one rate-limit error is waited out, six give up after five waits, other errors are not retried, only the failing batch is re-sent; 375 tests pass with the database tests.
 - **Eval questions have readable keys, fixed question and case types, required sources by key with the version they were written from, and numbered facts; an eval run records its settings and judge model, one result per question linked to the answer it scored, and per-fact verdicts; scores are a view, and a failed judgement is recorded without a score instead of failing the run.** Results were JSON with document ids that a reload invalidated, nothing linked a score to its answer, and one judge error lost the whole run.
   Evidence: database tests for each table, the review and score views (an unscored result is counted, never averaged as zero) and `record_eval_run`; runner tests (recall by source key, judge failure recorded and run continued, wrong verdict count); 414 tests pass with the database tests.
+- **`scripts/load_eval_questions.py` loads eval questions from `eval/questions.yaml`, naming required versions by source key and printed label; the first two questions are the BKW baseline questions; once a question has results its question and facts cannot change; the old seed script is gone.** Questions referred to document ids, and the seed questions covered topics outside this corpus.
+  Evidence: loader tests (label resolved to fingerprint, problems reported by question key before writing, missing file); database tests for replacing sources and facts and for the freeze once scored; 424 tests pass with the database tests.
 
 ## 2026-11-21
 

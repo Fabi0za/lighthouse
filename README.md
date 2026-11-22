@@ -28,9 +28,7 @@ User Question → Query Parser → Vector Search (top-40) → Cohere Rerank (top
 
 Evaluated with LLM-as-judge (GPT-4o-mini at the time, with OpenAI `text-embedding-3-small` embeddings) against required facts per question. The judge is now Claude Haiku 5.5 and embeddings are Cohere `embed-v5.0-pro`; these results have not been re-measured since.
 
-The evaluated question set was built from a private document corpus and is not
-included here. `scripts/seed_eval_questions.py` ships a small set of generic
-example questions instead — swap in your own to reproduce the workflow.
+Eval questions live in `eval/questions.yaml` (format in `scripts/load_eval_questions.py`); load them with `python scripts/load_eval_questions.py`.
 
 ## Tech stack
 
@@ -116,6 +114,9 @@ python scripts/flags.py list
 python scripts/flags.py approve VERSION_ID | reject VERSION_ID | confirm SOURCE_KEY
 python scripts/flags.py raise-overdue [--max-age-days N]
 python scripts/flags.py report-unreachable SOURCE_KEY ADDRESS [--message TEXT]
+
+# Eval questions from eval/questions.yaml (versions named by source key and label)
+python scripts/load_eval_questions.py [--file eval/questions.yaml]
 
 # Answers that saw a version, newest first, with the other versions each saw
 python scripts/answers.py saw --source SOURCE_KEY --label "VERSION LABEL"

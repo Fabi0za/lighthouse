@@ -253,3 +253,8 @@ def test_list_eval_runs_reads_the_view(db, mock_supabase):
     db.list_eval_runs()
     mock_supabase.table.assert_called_with("eval_run_scores")
 
+
+
+def test_save_eval_question_calls_rpc(db, mock_supabase):
+    db.save_eval_question({"key": "q"})
+    mock_supabase.rpc.assert_called_once_with("save_eval_question", {"p_question": {"key": "q"}})

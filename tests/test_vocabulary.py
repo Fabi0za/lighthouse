@@ -12,7 +12,6 @@ ROOT = Path(__file__).resolve().parent.parent
 OLD_WORDS = re.compile(r"grid|provider|hierarch|solar|\bpv\b|electrical", re.IGNORECASE)
 NOT_YET = {
     "app/generation/prompts.py": "prompt wording changes in Slice F",
-    "scripts/seed_eval_questions.py": "replaced in Slice E",
 }
 
 

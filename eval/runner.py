@@ -59,7 +59,7 @@ class EvalRunner:
                     question=question["question"],
                     generated_answer=answer["answer"],
                     expected_answer=question.get("expected_answer") or "",
-                    required_facts=[f["text"] for f in facts],
+                    facts=[f["text"] for f in facts],
                     anthropic_api_key=self.anthropic_api_key,
                     model=self.judge_model,
                 )

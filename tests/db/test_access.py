@@ -22,6 +22,7 @@ WRITE_FUNCTIONS = {
     "log_answer": "select log_answer('{}'::jsonb, '{}'::uuid[])",
     "save_source": "select save_source('s', 'national', '{}'::text[], null)",
     "record_eval_run": "select record_eval_run('{}'::jsonb)",
+    "save_eval_question": "select save_eval_question('{}'::jsonb)",
     "hold_candidate": "select hold_candidate(gen_random_uuid(), 'u', null)",
     "approve_candidate": "select approve_candidate(gen_random_uuid())",
     "raise_check_failed": "select raise_check_failed('s', 'u', null)",
