@@ -341,6 +341,25 @@ create table eval_question_facts (
     primary key (question_key, position)
 );
 
+-- The sources a question needs, each with the version its expected answer was written
+-- from (by text fingerprint, which a reload does not change).
+create table eval_question_sources (
+    question_key text not null references eval_questions(key) on delete cascade,
+    source_key text not null,
+    written_from_text_sha256 text not null,
+    primary key (question_key, source_key),
+    foreign key (source_key, written_from_text_sha256) references versions (source_key, text_sha256)
+);
+
+-- Questions whose expected answer was written from a version that is no longer current
+-- (or whose source has no current version): they need a person to check them.
+create view eval_questions_to_review with (security_invoker = true) as
+    select qs.question_key, qs.source_key, qs.written_from_text_sha256,
+           cur.text_sha256 as current_text_sha256
+    from eval_question_sources qs
+    left join versions cur on cur.source_key = qs.source_key and cur.status = 'current'
+    where cur.text_sha256 is distinct from qs.written_from_text_sha256;
+
 create table eval_runs (
     id uuid primary key default gen_random_uuid(),
     run_at timestamptz not null default now(),
@@ -726,6 +745,7 @@ alter table answers enable row level security;
 alter table answer_versions enable row level security;
 alter table eval_questions enable row level security;
 alter table eval_question_facts enable row level security;
+alter table eval_question_sources enable row level security;
 alter table eval_runs enable row level security;
 
 revoke execute on function begin_load(text, text, text, text, integer, text, text) from public, anon, authenticated;

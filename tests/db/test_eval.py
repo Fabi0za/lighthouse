@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import pytest
 
+from tests.db.conftest import make_source, make_version
+
 psycopg = pytest.importorskip("psycopg")
 from psycopg import errors
 
@@ -63,3 +65,47 @@ def test_eval_tables_have_no_json_columns(pg):
         "where table_name in ('eval_questions', 'eval_question_facts') "
         "and data_type in ('json', 'jsonb')").fetchall()
     assert rows == []
+
+
+# --- required sources and review ---------------------------------------------
+
+def require(conn, question_key, source_key, text_sha256):
+    conn.execute("insert into eval_question_sources (question_key, source_key, written_from_text_sha256) "
+                 "values (%s, %s, %s)", (question_key, source_key, text_sha256))
+
+
+def to_review(conn):
+    return conn.execute("select question_key, source_key, written_from_text_sha256, current_text_sha256 "
+                        "from eval_questions_to_review order by 1, 2").fetchall()
+
+
+def test_required_source_must_be_a_known_version(pg):
+    s = make_source(pg)
+    make_version(pg, s, status="current", text_sha256="t13")
+    q = make_question(pg)
+    with pytest.raises(errors.ForeignKeyViolation):
+        require(pg, q, s, "unknown")
+
+
+def test_question_on_the_current_version_needs_no_review(pg):
+    s = make_source(pg)
+    make_version(pg, s, status="current", text_sha256="t13")
+    require(pg, make_question(pg), s, "t13")
+    assert to_review(pg) == []
+
+
+def test_question_on_a_retired_version_is_listed_for_review(pg):
+    s = make_source(pg)
+    make_version(pg, s, status="retired", retired_at="2026-01-01", text_sha256="t12")
+    make_version(pg, s, status="current", text_sha256="t13")
+    q = make_question(pg)
+    require(pg, q, s, "t12")
+    assert to_review(pg) == [(q, s, "t12", "t13")]
+
+
+def test_source_without_current_version_is_listed(pg):
+    s = make_source(pg)
+    make_version(pg, s, status="retired", retired_at="2026-01-01", text_sha256="t12")
+    q = make_question(pg)
+    require(pg, q, s, "t12")
+    assert to_review(pg) == [(q, s, "t12", None)]

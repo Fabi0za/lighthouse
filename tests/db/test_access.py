@@ -89,3 +89,28 @@ def test_service_role_reads_and_writes(pg):
                         (answer_json(), [d])
                         ).fetchone()[0]
     assert answer_id is not None
+
+
+VIEWS = {"eval_questions_to_review"}
+
+
+def test_views_run_with_the_callers_rights(pg):
+    rows = pg.execute(
+        "select c.relname, c.reloptions from pg_class c join pg_namespace n on n.oid = c.relnamespace "
+        "where n.nspname = 'public' and c.relkind = 'v'").fetchall()
+    assert {r[0] for r in rows} == VIEWS
+    for name, options in rows:
+        assert "security_invoker=true" in (options or []), name
+
+
+@pytest.mark.parametrize("role", ["anon", "authenticated"])
+def test_role_sees_no_rows_through_views(pg, role):
+    from tests.db.conftest import make_source, make_version
+    s = make_source(pg)
+    make_version(pg, s, status="retired", retired_at="2026-01-01", text_sha256="t12")
+    pg.execute("insert into eval_questions values ('q', 'Q?', 'answerable', 'standard', null)")
+    pg.execute("insert into eval_question_sources values ('q', %s, 't12')", (s,))
+    _grant_like_supabase(pg, role)
+    pg.execute(f"set local role {role}")
+    for view in sorted(VIEWS):
+        assert pg.execute(f"select count(*) from {view}").fetchone()[0] == 0, view
