@@ -42,3 +42,12 @@ def test_sources_show_title_and_label():
 def test_formatter_section_empty_falls_back_to_page():
     chunks = [{"version_title": "T", "section_title": "", "page_number": 3}]
     assert ResponseFormatter().format("Antwort", chunks)["sources"] == [{"version_title": "T", "section": "", "page": 3}]
+
+
+def test_formatter_sources_carry_the_printed_label():
+    chunk = {"version_title": "Vorgaben an Niederspannungs-Installationen im Verteilnetz der BKW",
+             "version_label": "Version: V1.3, Gültig ab 21.05.2025",
+             "section_title": "4. Steuern oder Sperren von Anlagen", "page_number": 1}
+    (source,) = ResponseFormatter().format("Antwort", [chunk])["sources"]
+    assert source["version_title"] == ("Vorgaben an Niederspannungs-Installationen im Verteilnetz der BKW "
+                                       "(Version: V1.3, Gültig ab 21.05.2025)")

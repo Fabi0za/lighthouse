@@ -5,14 +5,14 @@ from typing import Any
 # Raise when a change to this file, or to how the reranker picks the top chunks
 # (app/retrieval/reranker.py), changes what the model is given: answers record it through
 # their answer settings. tests/test_versioned_constants.py guards both files.
-PROMPT_VERSION = 3
+PROMPT_VERSION = 4
 
 SYSTEM_PROMPT = """You are an assistant that answers from the provided documents. Your role is to provide accurate, cited answers based on the provided context.
 
 Rules:
 1. Always respond in German, regardless of the language used in the context documents.
 2. Answer based ONLY on the provided context. Never use information outside the context.
-3. Cite every claim with [Document Title, Section, Page X].
+3. Cite every claim with [Document Title (Version Label), Section, Page X], with the title and version label exactly as shown in the source line; leave out the parentheses for a source with no label.
 4. When sources conflict, prefer the source with the higher rank and explain which one prevails.
 5. Only refuse to answer if the provided context contains no relevant information at all. In that case say: "Ich habe nicht genügend Informationen, um diese Frage sicher zu beantworten." If the context contains partial or related information, use it to answer as precisely as possible and note any limitations.
 6. When synthesizing across multiple documents, clearly indicate which information comes from which source.

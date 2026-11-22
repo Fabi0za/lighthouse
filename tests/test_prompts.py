@@ -80,9 +80,21 @@ def test_prompt_shows_the_header_once():
 def test_system_prompt_keeps_its_rules():
     prompt = build_system_prompt()
     for kept in ("Always respond in German", "Answer based ONLY on the provided context",
-                 "Cite every claim with [Document Title, Section, Page X]",
+                 "Cite every claim with [Document Title (Version Label), Section, Page X]",
                  "Ich habe nicht genügend Informationen, um diese Frage sicher zu beantworten.",
                  "End your response with a confidence assessment: high, medium, or low."):
         assert kept in prompt, kept
     assert "assistant that answers from the provided documents" in prompt
 
+
+
+def test_citation_rule_asks_for_the_version_label():
+    rule = next(line for line in build_system_prompt().splitlines() if line.startswith("3. "))
+    assert "[Document Title (Version Label), Section, Page X]" in rule
+    assert "exactly as shown in the source line" in rule
+    assert "no label" in rule
+
+
+def test_only_the_citation_rule_changed():
+    rules = [line for line in build_system_prompt().splitlines() if line[:2] in {f"{n}." for n in range(1, 8)}]
+    assert len(rules) == 7

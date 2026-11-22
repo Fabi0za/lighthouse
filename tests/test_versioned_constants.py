@@ -18,8 +18,8 @@ from app.ingestion import chunker, fingerprint
 ROOT = Path(__file__).resolve().parent.parent
 
 RECORDED = {
-    "app/retrieval/reranker.py": ("PROMPT_VERSION", 3, "c322c71430db3c8d2d7f2de5303d0bb09d57ef70266f4ca9398bcb09f9485c8d"),  # decides the top 8 the model sees
-    "app/generation/prompts.py": ("PROMPT_VERSION", 3, "06db7d464b7e37d14685b1dbac337028a04549ebe18f9918748508f213941d11"),
+    "app/retrieval/reranker.py": ("PROMPT_VERSION", 4, "c322c71430db3c8d2d7f2de5303d0bb09d57ef70266f4ca9398bcb09f9485c8d"),  # decides the top 8 the model sees
+    "app/generation/prompts.py": ("PROMPT_VERSION", 4, "66b207d2d15f87c35bf517736265c30c991f283602944d36a068458439de63a4"),
     "app/ingestion/fingerprint.py": ("FINGERPRINT_RULE", 1, "340022d8019f445ecd4fd9413e424804dd875a96afc3fb54246ae75aeb7b3970"),
     "app/ingestion/parser.py": ("CHUNKER_VERSION", 2, "39c3c68eae055930fa1346d131f154aa14f07da54aeafea49a8b2425549ebcbd"),  # sections become chunks
     "app/ingestion/chunker.py": ("CHUNKER_VERSION", 2, "baa0469266ad40e786a120adb99fd1f9f05f66cedb0fae1e0a6e40df21f52f33"),
