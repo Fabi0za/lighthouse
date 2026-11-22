@@ -164,6 +164,7 @@ create table versions (
     retired_at timestamptz,
     unique (source_key, text_sha256),
     check (status not in ('held', 'failed') or flag_id is not null),
+    constraint versions_fingerprinted check (status in ('loading', 'failed') or text_sha256 is not null),
     check ((status = 'retired') = (retired_at is not null))
 );
 
@@ -175,8 +176,12 @@ create unique index versions_one_current_per_source
 create function versions_record_immutable() returns trigger
 language plpgsql as $$
 begin
+    -- While a version is being loaded (again) its text fingerprint and parsed output may
+    -- be replaced: a retry can parse the file differently. Past loading they are fixed.
     if new.file_sha256 is distinct from old.file_sha256
-       or (old.text_sha256 is not null and new.text_sha256 is distinct from old.text_sha256) then
+       or (not (new.status = 'loading' and old.status in ('loading', 'failed'))
+           and ((old.text_sha256 is not null and new.text_sha256 is distinct from old.text_sha256)
+                or (old.parsed_output is not null and new.parsed_output is distinct from old.parsed_output))) then
         raise exception 'fingerprints of version % cannot change', old.id
             using errcode = '23514';
     end if;
@@ -433,8 +438,9 @@ begin
           and status in ('loading', 'failed')
         for update;
     if found then
-        delete from chunks where version_id = v_id;   -- left by the earlier attempt
-        update versions set status = 'loading' where id = v_id;
+        -- left by the earlier attempt: chunks, and a fingerprint a new parse may not match
+        delete from chunks where version_id = v_id;
+        update versions set status = 'loading', text_sha256 = null, parsed_output = null where id = v_id;
         return v_id;
     end if;
     insert into versions (source_key, status, title, version_label, obtained_from, page_limit, file_sha256,

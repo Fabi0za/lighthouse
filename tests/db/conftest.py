@@ -145,7 +145,10 @@ def make_version(
     page_limit: int | None = None,
     indexing_settings_key: str = "test-a",
 ) -> str:
-    """A version; held gets an open candidate flag and failed a load_failed flag unless flag_id is given."""
+    """A version; held gets an open candidate flag and failed a load_failed flag unless flag_id is given.
+    Held, current and retired versions get a fingerprint unless text_sha256 is given."""
+    if text_sha256 is None and status in ("held", "current", "retired"):
+        text_sha256 = uuid.uuid4().hex
     if flag_id is None and status == "held":
         flag_id = make_flag(conn, source_key)
     if flag_id is None and status == "failed":

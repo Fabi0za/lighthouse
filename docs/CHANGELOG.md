@@ -68,6 +68,8 @@ Each entry: what changed and why, then the evidence. Measurements live in [basel
   Evidence: on the stale candidates, reranking with the header gives V1.2 sections 4, 1, 6.6, 6.1 (Q1) and 4, 1, 2, 6.6 ×2 (Q2) as in the earlier baseline, without it only 6.6 (`plans-local/rerank-header-check.txt`); reranker test; 449 tests pass.
 - **Citations ask for the version label: `[Document Title (Version Label), Section, Page X]`, exactly as the source line shows it; `PROMPT_VERSION` is 4.** Since the label moved out of the title into its own column, the model cited the title alone, so a reader could not see which edition an answer rested on.
   Evidence: a prompt test on the citation rule and a formatter test with the BKW label; per-answer label counts after re-running the baseline in `docs/baseline.md`; 452 tests pass with the database tests.
+- **A retried load may fingerprint its file again: taking up a failed or crashed version clears its text fingerprint and parsed output, which may change only while the version is loading; held, current and retired versions must have a fingerprint.** A retry that parsed the file to slightly different text was refused on every run and blocked the source's later versions (whole-branch review).
+  Evidence: a real-database load that fails after the fingerprint and is retried with other text ends current with its flag resolved; checks for the fixed fingerprint past loading and for the required fingerprint; 462 tests pass with the database tests.
 
 ## 2026-11-21
 

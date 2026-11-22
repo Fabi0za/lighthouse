@@ -57,7 +57,7 @@ def test_file_fingerprint_immutable(pg):
 
 
 def test_text_fingerprint_set_once(pg):
-    d = make_version(pg, make_source(pg))
+    d = make_version(pg, make_source(pg), status="failed")
     pg.execute("update versions set text_sha256 = 't1' where id = %s", (d,))
     with pytest.raises(errors.CheckViolation):
         pg.execute("update versions set text_sha256 = 't2' where id = %s", (d,))

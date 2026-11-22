@@ -196,3 +196,20 @@ async def test_second_version_reports_answers_that_saw_the_first(db, source, tmp
 
     assert (result.action, result.retired_seen_by) == ("promoted", 1)
 
+
+
+async def test_resume_after_fingerprint_with_other_text_is_promoted(db, source, tmp_path):
+    f = _pdf(tmp_path / "v1.pdf", 200)
+    parser, chunker, embedder = _deps(fail_embedding=True)  # fingerprint set, then embedding fails
+    with pytest.raises(RuntimeError):
+        await load_version(db, source, f, "Doc", None, parser, chunker, embedder)
+    assert _statuses(db.c, source) == ["failed"]
+
+    parser, chunker, embedder = _deps()
+    parser.parse_pdf = AsyncMock(return_value=(raw_of("Steuerdraht 2 ist optional (neu geparst)"), SECTIONS))
+    action, _, _ = await load_version(db, source, f, "Doc", None, parser, chunker, embedder)
+
+    assert action == "promoted"
+    assert _statuses(db.c, source) == ["current"]
+    (flag,) = _flags(db.c, source)
+    assert (flag["resolution"], flag["resolved_by"]) == ("fixed", "system")

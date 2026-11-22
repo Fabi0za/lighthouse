@@ -13,10 +13,14 @@ from psycopg import errors
 
 
 def begin(conn, source_key, file_sha256="f1", title="Doc", label=None, obtained_from=None, page_limit=None,
-          settings="test-a"):
-    return str(conn.execute("select begin_load(%s, %s, %s, %s, %s, %s, %s)",
-                            (source_key, title, label, obtained_from, page_limit, file_sha256, settings)
-                            ).fetchone()[0])
+          settings="test-a", fingerprint=True):
+    """begin_load, then the text fingerprint as load_version sets it before chunking."""
+    v = str(conn.execute("select begin_load(%s, %s, %s, %s, %s, %s, %s)",
+                         (source_key, title, label, obtained_from, page_limit, file_sha256, settings)
+                         ).fetchone()[0])
+    if fingerprint:
+        conn.execute("update versions set text_sha256 = %s where id = %s", (f"t-{file_sha256}", v))
+    return v
 
 
 def fail(conn, version_id, reason="load_failed", file="data/a.pdf", message="rate limit"):
@@ -38,7 +42,7 @@ def flag_of(conn, version_id):
 
 def test_begin_load_creates_loading_version_without_flag(pg):
     s = make_source(pg)
-    v = begin(pg, s, label="V1", obtained_from="https://example.org/a.pdf", page_limit=4)
+    v = begin(pg, s, label="V1", obtained_from="https://example.org/a.pdf", page_limit=4, fingerprint=False)
     row = doc(pg, v)
     assert (row["status"], row["flag_id"], row["version_label"], row["page_limit"]) == ("loading", None, "V1", 4)
     assert flags_of(pg, s) == []
@@ -244,3 +248,46 @@ def test_reject_held_candidate_through_hold(pg):
     pg.execute("select reject_version(%s)", (v,))
     assert doc(pg, v)["status"] == "retired"
     assert flag_of(pg, v)["resolution"] == "rejected"
+
+
+# --- resume after the fingerprint was set ---------------------------------------
+
+def _fingerprint(conn, version_id, text_sha256):
+    conn.execute("update versions set text_sha256 = %s, parsed_output = '{\"x\": 1}' where id = %s",
+                 (text_sha256, version_id))
+
+
+def test_resume_clears_fingerprint_and_parsed_output(pg):
+    s = make_source(pg)
+    v = begin(pg, s)
+    _fingerprint(pg, v, "t-old")
+    fail(pg, v)
+    assert begin(pg, s, fingerprint=False) == v
+    row = doc(pg, v)
+    assert (row["text_sha256"], row["parsed_output"]) == (None, None)
+
+
+def test_loading_version_may_be_fingerprinted_again(pg):
+    s = make_source(pg)
+    v = begin(pg, s)
+    _fingerprint(pg, v, "t-old")
+    _fingerprint(pg, v, "t-new")  # still loading: allowed
+    assert doc(pg, v)["text_sha256"] == "t-new"
+
+
+@pytest.mark.parametrize("status", ["held", "current", "retired", "failed"])
+def test_fingerprint_fixed_once_past_loading(pg, status):
+    s = make_source(pg)
+    v = make_version(pg, s, status=status, text_sha256="t1",
+                     retired_at="2026-01-01" if status == "retired" else None)
+    with pytest.raises(errors.CheckViolation):
+        pg.execute("update versions set text_sha256 = 't2' where id = %s", (v,))
+
+
+@pytest.mark.parametrize("status", ["held", "current", "retired"])
+def test_held_current_and_retired_need_a_fingerprint(pg, status):
+    s = make_source(pg)
+    v = begin(pg, s, fingerprint=False)
+    with pytest.raises(errors.CheckViolation):
+        pg.execute("update versions set status = %s, retired_at = %s where id = %s",
+                   (status, "2026-01-01" if status == "retired" else None, v))
