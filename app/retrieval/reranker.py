@@ -4,6 +4,7 @@ import time
 from typing import Any
 
 import cohere
+from cohere.errors import TooManyRequestsError
 
 
 class CohereReranker:
@@ -37,7 +38,7 @@ class CohereReranker:
                     top_n=self.top_n,
                     model=self.model,
                 )
-            except cohere.errors.too_many_requests_error.TooManyRequestsError:
+            except TooManyRequestsError:
                 if attempt == max_retries:
                     raise
                 wait = 7 * (attempt + 1)
