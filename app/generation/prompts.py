@@ -2,9 +2,10 @@ from __future__ import annotations
 
 from typing import Any
 
-# Raise when a change to this file changes what the model is given: answers record it
-# through their answer settings. tests/test_versioned_constants.py guards it.
-PROMPT_VERSION = 2
+# Raise when a change to this file, or to how the reranker picks the top chunks
+# (app/retrieval/reranker.py), changes what the model is given: answers record it through
+# their answer settings. tests/test_versioned_constants.py guards both files.
+PROMPT_VERSION = 3
 
 SYSTEM_PROMPT = """You are an assistant that answers from the provided documents. Your role is to provide accurate, cited answers based on the provided context.
 

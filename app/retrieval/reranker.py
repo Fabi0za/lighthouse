@@ -6,6 +6,8 @@ from typing import Any
 import cohere
 from cohere.errors import TooManyRequestsError
 
+from app.ingestion.embedder import embedding_input
+
 
 class CohereReranker:
     """Neural reranker using Cohere's rerank API."""
@@ -19,7 +21,10 @@ class CohereReranker:
         if not chunks:
             return []
 
-        docs = [c["content"] for c in chunks]
+        # Score the same text that was embedded: the version and section header, then the chunk.
+        # This decides the top chunks the model sees, so it is guarded by PROMPT_VERSION.
+        docs = [embedding_input(c.get("version_title", ""), c.get("version_label"),
+                                c.get("section_title") or "", c["content"]) for c in chunks]
         response = self._rerank_with_retry(query, docs)
 
         reranked = []

@@ -64,6 +64,8 @@ Each entry: what changed and why, then the evidence. Measurements live in [basel
   Evidence: parser tests; on the 11 cached parses sections go from 421 to 419 and chunks from 1183 to 1181 (`scripts/experiments/sections_check.py`, output in `plans-local/sections-check.txt`); 439 tests pass with the database tests.
 - **No function in the schema is executable by `anon` or `authenticated`; execute is revoked from them on every function at once, and `service_role` keeps its grant.** New functions are executable by PUBLIC by default, so the read functions and the trigger functions were open to the public roles; row level security kept them harmless, but nothing in the schema is for those roles.
   Evidence: access tests list no function executable by `anon` or `authenticated` and every function executable by `service_role`; 447 tests pass with the database tests.
+- **The reranker scores the same header and text as the embedding (`[title (label) — section]` + chunk); `PROMPT_VERSION` is 3 and its guard covers the reranker.** Since chunk text lost its header, the reranker scored bare text and dropped BKW V1.2's section 4 from the stale top 8; with the header the earlier top 8 returns.
+  Evidence: on the stale candidates, reranking with the header gives V1.2 sections 4, 1, 6.6, 6.1 (Q1) and 4, 1, 2, 6.6 ×2 (Q2) as in the earlier baseline, without it only 6.6 (`plans-local/rerank-header-check.txt`); reranker test; 449 tests pass.
 
 ## 2026-11-21
 
