@@ -2,6 +2,8 @@
 
 Status: approved 2026-11-21. Implementation plans are kept out of the repository.
 
+Partly superseded by `docs/plans/2026-11-22-audit.md` and the decisions recorded there; rewritten as built at the end of the cleanup.
+
 ## Why
 
 The assistant has no defence against a superseded document (see `docs/project-brief.md`). `docs/baseline.md` shows three failures on BKW Vorgaben V1.2 / V1.3:
