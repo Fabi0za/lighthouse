@@ -14,9 +14,13 @@ psycopg = pytest.importorskip("psycopg")
 from psycopg import errors
 
 WRITE_FUNCTIONS = {
-    "promote_version": "select promote_version(gen_random_uuid(), 'x')",
-    "reject_version": "select reject_version(gen_random_uuid(), 'x')",
+    "begin_load": "select begin_load('s', 't', null, null, null, 'f')",
+    "fail_load": "select fail_load(gen_random_uuid(), 'load_failed', 'f', null)",
+    "discard_version": "select discard_version(gen_random_uuid())",
+    "promote_version": "select promote_version(gen_random_uuid())",
+    "reject_version": "select reject_version(gen_random_uuid())",
     "log_answer": "select log_answer('{}'::jsonb, '{}'::uuid[])",
+    "save_source": "select save_source('s', 'national', '{}'::text[], null)",
 }
 
 
@@ -74,7 +78,7 @@ def test_service_role_reads_and_writes(pg):
     d = make_version(pg, s, text_sha256="t1")
     pg.execute("set local role service_role")
     assert pg.execute("select count(*) from sources").fetchone()[0] >= 1
-    pg.execute("select promote_version(%s, 'promoted (auto)')", (d,))
+    pg.execute("select promote_version(%s)", (d,))
     answer_id = pg.execute("select log_answer(%s::jsonb, %s::uuid[])",
                         ('{"question":"q","llm_prompt":"p","llm_response":"r","model_used":"m","latency_ms":1}', [d])
                         ).fetchone()[0]

@@ -125,8 +125,11 @@ comment on column flags.detail is
 create table versions (
     id uuid primary key default gen_random_uuid(),
     source_key text not null references sources(key) on delete restrict,
-    status text not null default 'pending'
-        check (status in ('pending', 'current', 'retired')),
+    -- loading: being loaded, not yet visible; failed: the load failed (flagged);
+    -- held: loaded, waiting for a person (flagged as candidate); current: searched;
+    -- retired: replaced or rejected, kept on record without chunks.
+    status text not null default 'loading'
+        check (status in ('loading', 'failed', 'held', 'current', 'retired')),
     flag_id bigint references flags(id),
     title text not null,              -- title as printed on the version
     version_label text,               -- version statement as printed on the cover; null if none
@@ -135,13 +138,11 @@ create table versions (
     file_sha256 text not null,        -- hash of the file bytes
     text_sha256 text,                 -- hash of normalised parsed text; decides "new version"
     parsed_output jsonb,              -- retained record of the version's content
-    ingestion_status text not null default 'pending',
     created_at timestamptz not null default now(),
     became_current_at timestamptz,
     retired_at timestamptz,
     unique (source_key, text_sha256),
-    check (status <> 'current' or ingestion_status = 'completed'),
-    check (status <> 'pending' or flag_id is not null),
+    check (status not in ('held', 'failed') or flag_id is not null),
     check ((status = 'retired') = (retired_at is not null))
 );
 
@@ -174,13 +175,13 @@ create trigger versions_record_immutable
     before update on versions
     for each row execute function versions_record_immutable();
 
--- A flag cannot be resolved while a pending version still points at it.
+-- A flag cannot be resolved while a held version still points at it.
 create function flags_resolve_guard() returns trigger
 language plpgsql as $$
 begin
     if new.resolved_at is not null and old.resolved_at is null
-       and exists (select 1 from versions where flag_id = new.id and status = 'pending') then
-        raise exception 'flag % still holds a pending version', new.id
+       and exists (select 1 from versions where flag_id = new.id and status = 'held') then
+        raise exception 'flag % still holds a held version', new.id
             using errcode = '23514';
     end if;
     return new;
@@ -190,27 +191,36 @@ create trigger flags_resolve_guard
     before update on flags
     for each row execute function flags_resolve_guard();
 
--- A pending version must be held by an open flag of its own source (checked when a
--- version is inserted as pending or set back to pending, e.g. when reinstated).
-create function versions_pending_needs_open_flag() returns trigger
+-- A held version waits for a person: it needs an open candidate flag of its own source.
+-- A failed version was flagged when its load failed: it needs a check_failed flag of its
+-- own source (still open, or resolved once a retry succeeded).
+create function versions_status_needs_flag() returns trigger
 language plpgsql as $$
 begin
-    if new.status = 'pending' and not exists (
+    if new.status = 'held' and not exists (
         select 1 from flags f
-        where f.id = new.flag_id and f.resolved_at is null and f.source_key = new.source_key
+        where f.id = new.flag_id and f.source_key = new.source_key
+          and f.kind = 'candidate' and f.resolved_at is null
     ) then
-        raise exception 'pending version % needs an open flag of source %', new.id, new.source_key
+        raise exception 'held version % needs an open candidate flag of source %', new.id, new.source_key
+            using errcode = '23514';
+    end if;
+    if new.status = 'failed' and not exists (
+        select 1 from flags f
+        where f.id = new.flag_id and f.source_key = new.source_key and f.kind = 'check_failed'
+    ) then
+        raise exception 'failed version % needs a check_failed flag of source %', new.id, new.source_key
             using errcode = '23514';
     end if;
     return new;
 end $$;
 
-create trigger versions_pending_needs_open_flag
+create trigger versions_status_needs_flag
     before insert or update of status, flag_id, source_key on versions
-    for each row execute function versions_pending_needs_open_flag();
+    for each row execute function versions_status_needs_flag();
 
 -- ---------------------------------------------------------------------------
--- Chunks: only current (and briefly pending) versions have any
+-- Chunks: only current versions, and versions being loaded or held, have any
 -- ---------------------------------------------------------------------------
 create table chunks (
     id uuid primary key default gen_random_uuid(),
@@ -280,12 +290,95 @@ create table eval_runs (
 -- so each swap is one function call.
 -- ---------------------------------------------------------------------------
 
--- Make a pending, fully loaded version current; retire the previous current
--- version and delete its chunks; resolve the flag. The source is not changed.
-create function promote_version(p_version_id uuid, p_resolution text) returns void
+-- Start loading a file as a version of a source. A routine load raises no flag.
+-- If the source already has a loading or failed version with these bytes (a crash or
+-- a failure earlier), that version is taken up again; its flag, if any, stays open
+-- until the load succeeds.
+create function begin_load(p_source_key text, p_title text, p_version_label text,
+                           p_obtained_from text, p_page_limit integer, p_file_sha256 text)
+returns uuid
+language plpgsql as $$
+declare
+    v_id uuid;
+begin
+    select id into v_id from versions
+        where source_key = p_source_key and file_sha256 = p_file_sha256
+          and status in ('loading', 'failed')
+        for update;
+    if found then
+        delete from chunks where version_id = v_id;   -- left by the earlier attempt
+        update versions set status = 'loading' where id = v_id;
+        return v_id;
+    end if;
+    insert into versions (source_key, status, title, version_label, obtained_from, page_limit, file_sha256)
+        values (p_source_key, 'loading', p_title, p_version_label, p_obtained_from, p_page_limit,
+                p_file_sha256)
+        returning id into v_id;
+    return v_id;
+end $$;
+
+-- Mark a load as failed and flag it for a person (check_failed, parse_failed or
+-- load_failed). A version that fails again keeps its one open flag, with the newer
+-- reason and message. Returns the flag number.
+create function fail_load(p_version_id uuid, p_reason text, p_file text, p_message text)
+returns bigint
 language plpgsql as $$
 declare
     v versions;
+    v_flag bigint;
+    v_detail jsonb := jsonb_strip_nulls(jsonb_build_object('file', p_file, 'message', p_message));
+begin
+    select * into v from versions where id = p_version_id for update;
+    if not found then
+        raise exception 'version % not found', p_version_id;
+    end if;
+    if v.status <> 'loading' then
+        raise exception 'version % is %, not loading', p_version_id, v.status;
+    end if;
+    select id into v_flag from flags
+        where id = v.flag_id and kind = 'check_failed' and resolved_at is null;
+    if found then
+        update flags set reason = p_reason, detail = v_detail where id = v_flag;
+    else
+        insert into flags (source_key, kind, reason, detail)
+            values (v.source_key, 'check_failed', p_reason, v_detail)
+            returning id into v_flag;
+    end if;
+    update versions set status = 'failed', flag_id = v_flag where id = p_version_id;
+    return v_flag;
+end $$;
+
+-- Remove a loading or failed version that will not be kept (same text as another
+-- version, or replaced by a newer file). Its flag, if open, is resolved: fixed by
+-- the system, since a newer file took its place.
+create function discard_version(p_version_id uuid) returns void
+language plpgsql as $$
+declare
+    v versions;
+begin
+    select * into v from versions where id = p_version_id for update;
+    if not found then
+        raise exception 'version % not found', p_version_id;
+    end if;
+    if v.status not in ('loading', 'failed') then
+        raise exception 'version % is %, only loading or failed versions can be discarded',
+            p_version_id, v.status;
+    end if;
+    delete from chunks where version_id = p_version_id;
+    delete from versions where id = p_version_id;
+    update flags set resolved_at = now(), resolution = 'fixed', resolved_by = 'system'
+        where id = v.flag_id and resolved_at is null;
+end $$;
+
+-- Make a loading (routine) or held (approved) version current; retire the previous
+-- current version and delete its chunks; resolve the version's flag, if any. The source
+-- is not changed. Returns how many earlier answers saw the version that was retired.
+create function promote_version(p_version_id uuid, p_resolved_by text default 'system')
+returns integer
+language plpgsql as $$
+declare
+    v versions;
+    v_seen integer;
 begin
     select * into v from versions where id = p_version_id;
     if not found then
@@ -293,25 +386,27 @@ begin
     end if;
     perform 1 from sources where key = v.source_key for update;
     select * into v from versions where id = p_version_id for update;
-    if v.status <> 'pending' then
-        raise exception 'version % is %, not pending', p_version_id, v.status;
-    end if;
-    if v.ingestion_status <> 'completed' then
-        raise exception 'version % is not loaded (ingestion_status %)', p_version_id, v.ingestion_status;
+    if v.status not in ('loading', 'held') then
+        raise exception 'version % is %, not loading or held', p_version_id, v.status;
     end if;
 
+    select count(distinct av.answer_id) into v_seen
+        from answer_versions av join versions old on old.id = av.version_id
+        where old.source_key = v.source_key and old.status = 'current';
     delete from chunks
         where version_id in (select id from versions where source_key = v.source_key and status = 'current');
     update versions set status = 'retired', retired_at = now()
         where source_key = v.source_key and status = 'current';
     update versions set status = 'current', became_current_at = now()
         where id = p_version_id;
-    update flags set resolved_at = now(), resolution = 'promoted', resolved_by = 'system'
-        where id = v.flag_id;
+    update flags set resolved_at = now(), resolved_by = p_resolved_by,
+                     resolution = case kind when 'candidate' then 'promoted' else 'fixed' end
+        where id = v.flag_id and resolved_at is null;
+    return v_seen;
 end $$;
 
--- Retire a pending version that should not become current; delete its chunks; resolve the flag.
-create function reject_version(p_version_id uuid, p_resolution text) returns void
+-- A person rejects a held candidate: it is retired, its chunks deleted, its flag resolved.
+create function reject_version(p_version_id uuid) returns void
 language plpgsql as $$
 declare
     v versions;
@@ -320,8 +415,8 @@ begin
     if not found then
         raise exception 'version % not found', p_version_id;
     end if;
-    if v.status <> 'pending' then
-        raise exception 'version % is %, not pending', p_version_id, v.status;
+    if v.status <> 'held' then
+        raise exception 'version % is %, not held', p_version_id, v.status;
     end if;
     delete from chunks where version_id = p_version_id;
     update versions set status = 'retired', retired_at = now() where id = p_version_id;
@@ -451,7 +546,10 @@ alter table answer_versions enable row level security;
 alter table eval_questions enable row level security;
 alter table eval_runs enable row level security;
 
+revoke execute on function begin_load(text, text, text, text, integer, text) from public, anon, authenticated;
+revoke execute on function fail_load(uuid, text, text, text) from public, anon, authenticated;
+revoke execute on function discard_version(uuid) from public, anon, authenticated;
 revoke execute on function promote_version(uuid, text) from public, anon, authenticated;
-revoke execute on function reject_version(uuid, text) from public, anon, authenticated;
+revoke execute on function reject_version(uuid) from public, anon, authenticated;
 revoke execute on function log_answer(jsonb, uuid[]) from public, anon, authenticated;
 revoke execute on function save_source(text, text, text[], text) from public, anon, authenticated;

@@ -38,22 +38,6 @@ def test_same_text_twice_rejected(pg):
         make_version(pg, s, text_sha256="t1")
 
 
-def test_current_requires_completed(pg):
-    s = make_source(pg)
-    with pytest.raises(errors.CheckViolation):
-        make_version(pg, s, status="current", ingestion_status="pending")
-
-
-def test_pending_requires_flag(pg):
-    s = make_source(pg)
-    with pytest.raises(errors.CheckViolation):
-        pg.execute(
-            "insert into versions (source_key, status, title, file_sha256) "
-            "values (%s, 'pending', 'Doc', 'f')",
-            (s,),
-        )
-
-
 def test_retired_requires_date(pg):
     s = make_source(pg)
     with pytest.raises(errors.CheckViolation):
@@ -103,33 +87,83 @@ def _resolved_flag(conn, source_key):
     return f
 
 
-def test_pending_rejects_resolved_flag(pg):
+# --- version status ----------------------------------------------------------
+
+@pytest.mark.parametrize("status", ["loading", "failed", "held", "current", "retired"])
+def test_status_values(pg, status):
+    make_version(pg, make_source(pg), status=status,
+                 retired_at="2026-01-01" if status == "retired" else None)
+
+
+def test_pending_is_no_status(pg):
+    with pytest.raises(errors.CheckViolation):
+        make_version(pg, make_source(pg), status="pending")
+
+
+def test_loading_needs_no_flag(pg):
+    make_version(pg, make_source(pg), status="loading")
+
+
+def test_held_needs_a_flag(pg):
     s = make_source(pg)
     with pytest.raises(errors.CheckViolation):
-        make_version(pg, s, flag_id=_resolved_flag(pg, s))
+        pg.execute("insert into versions (source_key, status, title, file_sha256) values (%s, 'held', 'D', 'f')",
+                   (s,))
 
 
-def test_pending_rejects_other_sources_flag(pg):
+def test_held_rejects_resolved_flag(pg):
+    s = make_source(pg)
+    with pytest.raises(errors.CheckViolation):
+        make_version(pg, s, status="held", flag_id=_resolved_flag(pg, s))
+
+
+def test_held_rejects_other_sources_flag(pg):
     s, other = make_source(pg, key="a"), make_source(pg, key="b")
     with pytest.raises(errors.CheckViolation):
-        make_version(pg, s, flag_id=make_flag(pg, other))
+        make_version(pg, s, status="held", flag_id=make_flag(pg, other))
 
 
-def test_reinstating_to_pending_needs_an_open_flag(pg):
+def test_held_rejects_check_failed_flag(pg):
+    s = make_source(pg)
+    f = make_flag(pg, s, "check_failed", "load_failed", '{"file": "data/a.pdf"}')
+    with pytest.raises(errors.CheckViolation):
+        make_version(pg, s, status="held", flag_id=f)
+
+
+def test_failed_needs_a_check_failed_flag(pg):
+    s = make_source(pg)
+    with pytest.raises(errors.CheckViolation):
+        make_version(pg, s, status="failed", flag_id=make_flag(pg, s))  # a candidate flag
+
+
+def test_failed_keeps_its_flag_once_resolved(pg):
+    s = make_source(pg)
+    f = make_flag(pg, s, "check_failed", "load_failed", '{"file": "data/a.pdf"}')
+    resolve_flag(pg, f, "fixed", "system")
+    make_version(pg, s, status="failed", flag_id=f)
+
+
+def test_versions_have_no_ingestion_status(pg):
+    cols = {r[0] for r in pg.execute(
+        "select column_name from information_schema.columns where table_name = 'versions'")}
+    assert "ingestion_status" not in cols
+
+
+def test_reinstating_to_held_needs_an_open_flag(pg):
     s = make_source(pg)
     d = make_version(pg, s, status="retired", retired_at="2026-01-01", text_sha256="t1")
     with pytest.raises(errors.CheckViolation):
         pg.execute(
-            "update versions set status = 'pending', retired_at = null, flag_id = %s where id = %s",
+            "update versions set status = 'held', retired_at = null, flag_id = %s where id = %s",
             (_resolved_flag(pg, s), d),
         )
 
 
-def test_reinstating_to_pending_with_open_flag_succeeds(pg):
+def test_reinstating_to_held_with_open_flag_succeeds(pg):
     s = make_source(pg)
     d = make_version(pg, s, status="retired", retired_at="2026-01-01", text_sha256="t1")
     pg.execute(
-        "update versions set status = 'pending', retired_at = null, flag_id = %s where id = %s",
+        "update versions set status = 'held', retired_at = null, flag_id = %s where id = %s",
         (make_flag(pg, s), d),
     )
 

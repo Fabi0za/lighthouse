@@ -45,48 +45,6 @@ def test_insert_chunks(db, mock_supabase):
     mock_supabase.table.assert_called_with("chunks")
 
 
-def test_hold_version_inserts_flag_before_pending_document(db, mock_supabase):
-    flag_id, doc_id = str(uuid.uuid4()), str(uuid.uuid4())
-    mock_supabase.execute.side_effect = [
-        MagicMock(data=[{"id": flag_id}]),
-        MagicMock(data=[{"id": doc_id, "status": "pending"}]),
-    ]
-    source_key = "bkw-vorgaben"
-
-    doc = db.hold_version(source_key, "Doc", "V2", "https://example.org/v2.pdf", 4, "abc")
-
-    tables = [c.args[0] for c in mock_supabase.table.call_args_list]
-    assert tables == ["flags", "versions"]
-    flag_row = mock_supabase.insert.call_args_list[0].args[0]
-    assert flag_row == {"source_key": source_key, "kind": "candidate", "reason": "possible_successor",
-                        "detail": {"address": "https://example.org/v2.pdf"}}
-    doc_row = mock_supabase.insert.call_args_list[1].args[0]
-    assert doc_row["flag_id"] == flag_id
-    assert doc_row["status"] == "pending"
-    assert doc_row["source_key"] == source_key
-    assert doc_row["file_sha256"] == "abc"
-    assert (doc_row["title"], doc_row["version_label"], doc_row["page_limit"]) == ("Doc", "V2", 4)
-    assert doc_row["obtained_from"] == "https://example.org/v2.pdf"
-    assert "file_path" not in doc_row
-    assert doc["id"] == doc_id
-
-
-def test_promote_version_calls_rpc(db, mock_supabase):
-    doc_id = uuid.uuid4()
-    db.promote_version(doc_id, "promoted (auto)")
-    mock_supabase.rpc.assert_called_once_with(
-        "promote_version", {"p_version_id": str(doc_id), "p_resolution": "promoted (auto)"}
-    )
-
-
-def test_reject_version_calls_rpc(db, mock_supabase):
-    doc_id = uuid.uuid4()
-    db.reject_version(doc_id, "rejected")
-    mock_supabase.rpc.assert_called_once_with(
-        "reject_version", {"p_version_id": str(doc_id), "p_resolution": "rejected"}
-    )
-
-
 def test_log_answer_calls_rpc_and_returns_id(db, mock_supabase):
     answer_id = str(uuid.uuid4())
     mock_supabase.rpc.return_value.execute.return_value = MagicMock(data=answer_id)
@@ -95,26 +53,6 @@ def test_log_answer_calls_rpc_and_returns_id(db, mock_supabase):
         "log_answer", {"p_answer": {"question": "q"}, "p_version_ids": ["d1", "d2"]}
     )
     assert result == answer_id
-
-
-
-
-
-
-def test_delete_pending_version_refuses_non_pending(db, mock_supabase):
-    mock_supabase.execute.return_value = MagicMock(data=[{"id": "d", "status": "current", "flag_id": "f"}])
-    with pytest.raises(ValueError):
-        db.delete_pending_version("d", "dismissed")
-
-
-def test_delete_pending_version_deletes_then_resolves_flag(db, mock_supabase):
-    mock_supabase.execute.return_value = MagicMock(data=[{"id": "d", "status": "pending", "flag_id": "f"}])
-    db.delete_pending_version("d", "dismissed (same text)")
-    tables = [c.args[0] for c in mock_supabase.table.call_args_list]
-    assert tables == ["versions", "chunks", "versions", "flags"]
-    update = mock_supabase.update.call_args.args[0]
-    assert (update["resolution"], update["resolved_by"]) == ("fixed", "system")
-    assert "resolved_at" in update
 
 
 def test_set_text_fingerprint(db, mock_supabase):
@@ -155,14 +93,6 @@ def test_list_source_keys(db, mock_supabase):
     mock_supabase.table.assert_called_with("sources")
 
 
-def test_hold_version_writes_source_key(db, mock_supabase):
-    mock_supabase.execute.side_effect = [MagicMock(data=[{"id": "f"}]), MagicMock(data=[{"id": "v"}])]
-    db.hold_version("s", "T", None, None, None, "h")
-    assert mock_supabase.insert.call_args_list[0].args[0]["source_key"] == "s"
-    assert mock_supabase.insert.call_args_list[1].args[0]["source_key"] == "s"
-
-
-
 def test_save_levels_upserts_on_key(db, mock_supabase):
     rows = [{"key": "national", "rank": 1, "requires_scope": False}]
     db.save_levels(rows)
@@ -175,3 +105,44 @@ def test_save_scopes_upserts_on_key(db, mock_supabase):
     db.save_scopes(rows)
     mock_supabase.table.assert_called_with("scopes")
     mock_supabase.upsert.assert_called_once_with(rows, on_conflict="key")
+
+
+def _rpc_returns(mock_supabase, data):
+    mock_supabase.rpc.return_value.execute.return_value = MagicMock(data=data)
+
+
+def test_begin_load_calls_rpc_and_returns_id(db, mock_supabase):
+    _rpc_returns(mock_supabase, "v1")
+    assert db.begin_load("s", "Doc", "V2", "https://example.org/v2.pdf", 4, "abc") == "v1"
+    mock_supabase.rpc.assert_called_once_with("begin_load", {
+        "p_source_key": "s", "p_title": "Doc", "p_version_label": "V2",
+        "p_obtained_from": "https://example.org/v2.pdf", "p_page_limit": 4, "p_file_sha256": "abc"})
+
+
+def test_fail_load_calls_rpc_and_returns_flag_number(db, mock_supabase):
+    _rpc_returns(mock_supabase, 12)
+    assert db.fail_load("v1", "load_failed", "data/a.pdf", "boom") == 12
+    mock_supabase.rpc.assert_called_once_with("fail_load", {
+        "p_version_id": "v1", "p_reason": "load_failed", "p_file": "data/a.pdf", "p_message": "boom"})
+
+
+def test_discard_version_calls_rpc(db, mock_supabase):
+    db.discard_version("v1")
+    mock_supabase.rpc.assert_called_once_with("discard_version", {"p_version_id": "v1"})
+
+
+def test_promote_version_calls_rpc_and_returns_answer_count(db, mock_supabase):
+    _rpc_returns(mock_supabase, 3)
+    assert db.promote_version("v1") == 3
+    mock_supabase.rpc.assert_called_once_with("promote_version", {"p_version_id": "v1", "p_resolved_by": "system"})
+
+
+def test_reject_version_calls_rpc(db, mock_supabase):
+    db.reject_version("v1")
+    mock_supabase.rpc.assert_called_once_with("reject_version", {"p_version_id": "v1"})
+
+
+def test_removed_lifecycle_methods(db):
+    for name in ("hold_version", "delete_pending_version", "update_version"):
+        assert not hasattr(db, name), name
+

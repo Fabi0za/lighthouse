@@ -1,4 +1,4 @@
-"""promote_version, reject_version, log_answer and current-only search, on a real Postgres."""
+"""log_answer and current-only search, on a real Postgres. Lifecycle functions: test_lifecycle.py."""
 from __future__ import annotations
 
 import json
@@ -41,101 +41,14 @@ def flag_of(conn, doc_id: str) -> dict:
     return {"resolved_at": row[0], "resolution": row[1]}
 
 
-def promote(conn, doc_id: str, resolution: str = "promoted (auto)") -> None:
-    conn.execute("select promote_version(%s, %s)", (doc_id, resolution))
+def promote(conn, version_id: str) -> int:
+    """Promote as the routine load does; returns how many answers saw the retired version."""
+    return conn.execute("select promote_version(%s)", (version_id,)).fetchone()[0]
 
 
 def search_ids(conn) -> set:
     return {str(r[0]) for r in conn.execute(
         "select version_id from match_chunks(%s::vector, 40)", (VEC,)).fetchall()}
-
-
-# --- promote ---------------------------------------------------------------
-
-def test_promote_first_version(pg):
-    s = make_source(pg)
-    d = make_version(pg, s, obtained_from="https://example.org/v1.pdf", text_sha256="t1")
-    promote(pg, d)
-    row = doc(pg, d)
-    assert row["status"] == "current"
-    assert row["became_current_at"] is not None
-    assert flag_of(pg, d)["resolved_at"] is not None
-    assert flag_of(pg, d)["resolution"] == "promoted"
-
-
-def test_promote_leaves_source_alone(pg):
-    s = make_source(pg, watch_address="https://example.org/watched.pdf")
-    before = pg.execute("select watch_address, confirmed_at from sources where key = %s", (s,)).fetchone()
-    promote(pg, make_version(pg, s, obtained_from="https://example.org/elsewhere.pdf", text_sha256="t1"))
-    after = pg.execute("select watch_address, confirmed_at from sources where key = %s", (s,)).fetchone()
-    assert after == before
-
-
-def test_promote_retires_previous(pg):
-    s = make_source(pg)
-    v1 = make_version(pg, s, text_sha256="t1", file_sha256="f1")
-    pg.execute("update versions set parsed_output = %s where id = %s", (json.dumps({"x": 1}), v1))
-    add_chunk(pg, v1)
-    promote(pg, v1)
-    v2 = make_version(pg, s, text_sha256="t2")
-    add_chunk(pg, v2)
-    promote(pg, v2)
-    old = doc(pg, v1)
-    assert old["status"] == "retired"
-    assert old["retired_at"] is not None
-    assert chunk_count(pg, v1) == 0
-    assert old["parsed_output"] == {"x": 1}
-    assert (old["file_sha256"], old["text_sha256"]) == ("f1", "t1")
-    assert doc(pg, v2)["status"] == "current"
-    assert chunk_count(pg, v2) == 1
-
-
-def test_promote_not_loaded_fails_atomically(pg_db_url):
-    with psycopg.connect(pg_db_url) as conn:
-        s = make_source(conn)
-        v1 = make_version(conn, s, text_sha256="t1")
-        add_chunk(conn, v1)
-        promote(conn, v1)
-        v2 = make_version(conn, s, text_sha256="t2", ingestion_status="processing")
-        conn.commit()
-        with pytest.raises(errors.RaiseException):
-            promote(conn, v2)
-        conn.rollback()
-    with psycopg.connect(pg_db_url) as fresh:
-        assert doc(fresh, v1)["status"] == "current"
-        assert chunk_count(fresh, v1) == 1
-        assert doc(fresh, v2)["status"] == "pending"
-
-
-@pytest.mark.parametrize("status", ["current", "retired"])
-def test_promote_requires_pending(pg, status):
-    s = make_source(pg)
-    d = make_version(pg, s, status=status, text_sha256="t1",
-                      retired_at="2026-01-01" if status == "retired" else None)
-    with pytest.raises(errors.RaiseException):
-        promote(pg, d)
-
-
-# --- reject ----------------------------------------------------------------
-
-def test_reject_version(pg):
-    s = make_source(pg)
-    d = make_version(pg, s, text_sha256="t1")
-    add_chunk(pg, d)
-    pg.execute("select reject_version(%s, 'rejected')", (d,))
-    row = doc(pg, d)
-    assert row["status"] == "retired"
-    assert row["became_current_at"] is None
-    assert chunk_count(pg, d) == 0
-    assert flag_of(pg, d)["resolution"] == "rejected"
-
-
-def test_reject_requires_pending(pg):
-    s = make_source(pg)
-    d = make_version(pg, s, text_sha256="t1")
-    promote(pg, d)
-    with pytest.raises(errors.RaiseException):
-        pg.execute("select reject_version(%s, 'rejected')", (d,))
 
 
 # --- search ----------------------------------------------------------------

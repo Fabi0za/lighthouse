@@ -24,7 +24,8 @@ def _pdf(path: Path, pages: int = 1) -> Path:
 def _deps(existing: list[dict] | None = None, sections=SECTIONS, pages_seen: list[int] | None = None):
     db = MagicMock()
     db.list_versions.return_value = existing or []
-    db.hold_version.return_value = {"id": "new-doc", "status": "pending", "flag_id": "flag-1"}
+    db.begin_load.return_value = "new-doc"
+    db.promote_version.return_value = 0
     parser = MagicMock()
 
     async def parse(path):
@@ -50,13 +51,13 @@ async def test_new_file_promoted(tmp_path):
                                         parser, chunker, embedder, version_label="V2")
 
     assert (action, doc_id) == ("promoted", "new-doc")
-    db.hold_version.assert_called_once_with(
+    db.begin_load.assert_called_once_with(
         "src-1", "Doc", "V2", "https://example.org/v2.pdf", None, file_sha256(f)
     )
     db.set_text_fingerprint.assert_called_once_with("new-doc", text_sha256(SECTIONS), {"result": {"raw": True}})
     assert chunker.chunk_sections.call_args.kwargs["doc_title"] == "Doc (V2)"
-    db.update_version.assert_called_with("new-doc", {"ingestion_status": "completed"})
-    db.promote_version.assert_called_once_with("new-doc", "promoted (auto)")
+    db.promote_version.assert_called_once_with("new-doc")
+    db.fail_load.assert_not_called()
 
 
 async def test_same_bytes_skipped(tmp_path):
@@ -65,7 +66,7 @@ async def test_same_bytes_skipped(tmp_path):
     db, parser, chunker, embedder = _deps(existing)
 
     assert await load_version(db, SOURCE, f, "Doc", None, parser, chunker, embedder) == ("skipped", "old")
-    db.hold_version.assert_not_called()
+    db.begin_load.assert_not_called()
 
 
 async def test_same_bytes_as_retired_version_skipped(tmp_path):
@@ -85,38 +86,10 @@ async def test_same_text_new_bytes_is_dismissed(tmp_path):
     action, doc_id = await load_version(db, SOURCE, f, "Doc", None, parser, chunker, embedder)
 
     assert (action, doc_id) == ("dismissed", "old")
-    db.delete_pending_version.assert_called_once_with("new-doc", "dismissed (same text)")
+    db.discard_version.assert_called_once_with("new-doc")
     db.set_text_fingerprint.assert_not_called()
     db.insert_chunks.assert_not_called()
     db.promote_version.assert_not_called()
-
-
-async def test_plan_resumes_pending_row(tmp_path):
-    f = _pdf(tmp_path / "v2.pdf")
-    existing = [{"id": "stale", "status": "pending", "file_sha256": file_sha256(f), "text_sha256": None}]
-    db, parser, chunker, embedder = _deps(existing)
-    order = []
-    db.delete_pending_version.side_effect = lambda *a: order.append(("delete", a))
-    db.hold_version.side_effect = lambda *a, **k: order.append(("hold", a)) or {"id": "new-doc"}
-
-    action, _ = await load_version(db, SOURCE, f, "Doc", None, parser, chunker, embedder)
-
-    assert action == "promoted"
-    assert order[0] == ("delete", ("stale", "dismissed (reload)"))
-    assert order[1][0] == "hold"
-
-
-async def test_failure_marks_failed_and_keeps_flag(tmp_path):
-    f = _pdf(tmp_path / "v2.pdf")
-    db, parser, chunker, embedder = _deps()
-    embedder.embed_texts = AsyncMock(side_effect=RuntimeError("boom"))
-
-    with pytest.raises(RuntimeError):
-        await load_version(db, SOURCE, f, "Doc", None, parser, chunker, embedder)
-
-    db.update_version.assert_called_with("new-doc", {"ingestion_status": "failed"})
-    db.promote_version.assert_not_called()
-    db.delete_pending_version.assert_not_called()
 
 
 async def test_chunk_records_have_no_removed_columns(tmp_path):
@@ -139,8 +112,8 @@ async def test_max_pages_limits_parse_but_not_fingerprint(tmp_path):
     await load_version(db, SOURCE, f, "Doc", None, parser, chunker, embedder, max_pages=4)
 
     assert pages_seen == [4]
-    assert db.hold_version.call_args.args[4] == 4  # page_limit recorded on the version
-    assert db.hold_version.call_args.args[5] == file_sha256(f)
+    assert db.begin_load.call_args.args[4] == 4  # page_limit recorded on the version
+    assert db.begin_load.call_args.args[5] == file_sha256(f)
 
 
 async def test_empty_parse_fails(tmp_path):
@@ -210,16 +183,17 @@ def test_cached_output_path(tmp_path):
     assert cached_output(cache, file_sha256(f)) == cache / f"{file_sha256(f)}.json"
 
 
-async def test_pending_row_with_same_text_but_other_bytes_is_dismissed_not_stuck(tmp_path):
+@pytest.mark.parametrize("status", ["loading", "failed"])
+async def test_unfinished_version_with_same_text_but_other_bytes_is_discarded(tmp_path, status):
     f = _pdf(tmp_path / "v2b.pdf")
-    existing = [{"id": "stale", "status": "pending", "file_sha256": "older-bytes",
+    existing = [{"id": "stale", "status": status, "file_sha256": "older-bytes",
                  "text_sha256": text_sha256(SECTIONS)}]
     db, parser, chunker, embedder = _deps(existing)
 
     action, doc_id = await load_version(db, SOURCE, f, "Doc", None, parser, chunker, embedder)
 
     assert (action, doc_id) == ("promoted", "new-doc")
-    db.delete_pending_version.assert_called_once_with("stale", "dismissed (reload)")
+    db.discard_version.assert_called_once_with("stale")
     db.set_text_fingerprint.assert_called_once()
 
 
@@ -228,3 +202,42 @@ async def test_chunk_header_uses_display_title_without_label(tmp_path):
     db, parser, chunker, embedder = _deps()
     await load_version(db, SOURCE, f, "Merkblatt", None, parser, chunker, embedder)
     assert chunker.chunk_sections.call_args.kwargs["doc_title"] == "Merkblatt"
+
+
+@pytest.mark.parametrize("status", ["loading", "failed"])
+async def test_unfinished_version_with_same_bytes_is_taken_up_again(tmp_path, status):
+    f = _pdf(tmp_path / "v2.pdf")
+    existing = [{"id": "new-doc", "status": status, "file_sha256": file_sha256(f), "text_sha256": None}]
+    db, parser, chunker, embedder = _deps(existing)
+
+    action, doc_id = await load_version(db, SOURCE, f, "Doc", None, parser, chunker, embedder)
+
+    assert (action, doc_id) == ("promoted", "new-doc")
+    db.begin_load.assert_called_once()
+    db.discard_version.assert_not_called()
+
+
+async def test_parser_error_is_parse_failed(tmp_path):
+    f = _pdf(tmp_path / "v2.pdf")
+    db, parser, chunker, embedder = _deps()
+    parser.parse_pdf = AsyncMock(side_effect=TimeoutError("parser timed out"))
+
+    with pytest.raises(TimeoutError):
+        await load_version(db, SOURCE, f, "Doc", None, parser, chunker, embedder, listed_path="data/v2.pdf")
+
+    db.fail_load.assert_called_once_with("new-doc", "parse_failed", "data/v2.pdf",
+                                         "TimeoutError: parser timed out")
+    db.promote_version.assert_not_called()
+
+
+async def test_later_error_is_load_failed(tmp_path):
+    f = _pdf(tmp_path / "v2.pdf")
+    db, parser, chunker, embedder = _deps()
+    embedder.embed_texts = AsyncMock(side_effect=RuntimeError("rate limit"))
+
+    with pytest.raises(RuntimeError):
+        await load_version(db, SOURCE, f, "Doc", None, parser, chunker, embedder)
+
+    db.fail_load.assert_called_once_with("new-doc", "load_failed", "v2.pdf", "RuntimeError: rate limit")
+    db.promote_version.assert_not_called()
+

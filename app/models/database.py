@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, datetime
 from typing import Any
 
 from app.config import get_settings
@@ -66,20 +65,7 @@ class DatabaseClient:
             query = query.eq("source_key", source_key)
         return query.execute().data
 
-    def get_version(self, doc_id: uuid.UUID) -> dict[str, Any] | None:
-        result = self.client.table("versions").select("*").eq("id", str(doc_id)).execute()
-        return result.data[0] if result.data else None
-
-    def update_version(self, doc_id: uuid.UUID, updates: dict[str, Any]) -> dict[str, Any]:
-        return (
-            self.client.table("versions")
-            .update(updates)
-            .eq("id", str(doc_id))
-            .execute()
-            .data[0]
-        )
-
-    def hold_version(
+    def begin_load(
         self,
         source_key: str,
         title: str,
@@ -87,51 +73,40 @@ class DatabaseClient:
         obtained_from: str | None,
         page_limit: int | None,
         file_sha256: str,
-    ) -> dict[str, Any]:
-        """Insert the flag that holds a new version, then the pending version itself."""
-        flag = self.client.table("flags").insert({
-            "source_key": source_key, "kind": "candidate", "reason": "possible_successor",
-            "detail": {"address": obtained_from or ""},
-        }).execute().data[0]
-        return self.client.table("versions").insert({
-            "source_key": source_key,
-            "status": "pending",
-            "flag_id": flag["id"],
-            "title": title,
-            "version_label": version_label,
-            "obtained_from": obtained_from,
-            "page_limit": page_limit,
-            "file_sha256": file_sha256,
-            "ingestion_status": "pending",
-        }).execute().data[0]
+    ) -> str:
+        """Start loading a file as a version (status loading, no flag); returns the version id.
 
-    def set_text_fingerprint(self, doc_id: str, text_sha256: str, parsed_output: dict[str, Any]) -> None:
+        A loading or failed version with the same bytes is taken up again.
+        """
+        return self.client.rpc("begin_load", {
+            "p_source_key": source_key, "p_title": title, "p_version_label": version_label,
+            "p_obtained_from": obtained_from, "p_page_limit": page_limit, "p_file_sha256": file_sha256,
+        }).execute().data
+
+    def set_text_fingerprint(self, version_id: str, text_sha256: str, parsed_output: dict[str, Any]) -> None:
         self.client.table("versions").update(
             {"text_sha256": text_sha256, "parsed_output": parsed_output}
-        ).eq("id", str(doc_id)).execute()
+        ).eq("id", str(version_id)).execute()
 
-    def promote_version(self, doc_id: str | uuid.UUID, resolution: str) -> None:
-        self.client.rpc(
-            "promote_version", {"p_version_id": str(doc_id), "p_resolution": resolution}
-        ).execute()
+    def fail_load(self, version_id: str, reason: str, file: str, message: str) -> int:
+        """Mark the load failed and flag it (parse_failed or load_failed); returns the flag number."""
+        return self.client.rpc("fail_load", {
+            "p_version_id": str(version_id), "p_reason": reason, "p_file": file, "p_message": message,
+        }).execute().data
 
-    def reject_version(self, doc_id: str | uuid.UUID, resolution: str) -> None:
-        self.client.rpc(
-            "reject_version", {"p_version_id": str(doc_id), "p_resolution": resolution}
-        ).execute()
+    def discard_version(self, version_id: str) -> None:
+        """Delete a loading or failed version that will not be kept."""
+        self.client.rpc("discard_version", {"p_version_id": str(version_id)}).execute()
 
-    def delete_pending_version(self, doc_id: str | uuid.UUID, resolution: str) -> None:
-        """Remove a pending version that will not be kept (repackaging, interrupted load)."""
-        doc = self.get_version(doc_id)
-        if doc is None or doc.get("status") != "pending":
-            raise ValueError(f"document {doc_id} is not pending")
-        self.client.table("chunks").delete().eq("version_id", str(doc_id)).execute()
-        self.client.table("versions").delete().eq("id", str(doc_id)).execute()
-        self.client.table("flags").update({
-            "resolved_at": datetime.now(UTC).isoformat(),
-            "resolution": "fixed",
-            "resolved_by": "system",
-        }).eq("id", doc["flag_id"]).execute()
+    def promote_version(self, version_id: str, resolved_by: str = "system") -> int:
+        """Make the version current; returns how many earlier answers saw the version it retired."""
+        return self.client.rpc(
+            "promote_version", {"p_version_id": str(version_id), "p_resolved_by": resolved_by}
+        ).execute().data
+
+    def reject_version(self, version_id: str) -> None:
+        """A person rejects a held candidate."""
+        self.client.rpc("reject_version", {"p_version_id": str(version_id)}).execute()
 
     # --- chunks and search --------------------------------------------------
 

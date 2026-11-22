@@ -263,6 +263,7 @@ async def load_all(corpus: Corpus, repo_root, db, parser, chunker, embedder, loa
                 action, doc_id = await load(
                     db, s.key, repo_root / v.path, v.title, v.obtained_from,
                     parser, chunker, embedder, version_label=v.label, max_pages=v.max_pages,
+                    listed_path=v.path,
                     parsed_cache=parsed_cache,
                 )
             except Exception as e:  # noqa: BLE001 - report, then skip this source's later versions
@@ -299,7 +300,7 @@ async def main() -> int:
 
     db = DatabaseClient()
     if args.dry_run:
-        known = {d["file_sha256"] for d in db.list_versions() if d.get("status") != "pending"}
+        known = {d["file_sha256"] for d in db.list_versions() if d.get("status") not in ("loading", "failed")}
         for s, v, action in plan(corpus.sources, known, repo_root, parsed_cache=args.parsed_cache):
             pages = f", first {v.max_pages} pages" if v.max_pages else ""
             print(f"{action:5}  {v.path}  [{s.level}/{','.join(s.scopes) or '-'}{pages}]")

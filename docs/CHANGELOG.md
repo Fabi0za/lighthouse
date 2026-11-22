@@ -24,6 +24,10 @@ Each entry: what changed and why, then the evidence. Measurements live in [basel
   Evidence: loader tests for an unlisted stored key, unknown level and scope, a source the database refuses while others still load; the checked-in corpus parses to 10 sources and 11 versions with unchanged paths and addresses; 210 tests pass with the database tests.
 - **Flags have a running number, a reason, and fixed lists for kind, reason, resolution and who resolved them; `detail` names the file or the address.** Kind and resolution were free text or held unused values, and `detail` was always empty.
   Evidence: `tests/db/test_flags.py`: all 15 kind/reason combinations (5 accepted), unknown values, the three resolution fields set together, the detail shape; 240 tests pass with the database tests.
+- **A version has one status: loading, failed, held, current or retired; held needs an open candidate flag and failed a load flag.** Two status columns described one lifecycle, and pending stood both for a load in progress and for a version waiting for a person.
+  Evidence: database tests for each status and its flag rule; 271 tests pass with the database tests.
+- **Routine loads raise no flag; a failed load leaves a failed version with a `check_failed` flag (`parse_failed` or `load_failed`) naming the file as listed in `corpus.yaml`, and a later successful load of the same bytes resolves it.** Flags are for what a person must handle; "same content, different packaging: no flag" now holds by construction, and a crash mid-load no longer leaves an orphan flag.
+  Evidence: real-database load tests: a routine load and a repackaged file leave no flag, a parser timeout gives `parse_failed`, an embedding failure gives `load_failed` and the retry resolves it `fixed` by `system`, a crashed load is resumed; 271 tests pass.
 
 ## 2026-11-21
 

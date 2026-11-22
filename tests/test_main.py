@@ -24,10 +24,6 @@ def mock_db():
         {"id": str(uuid.uuid4()), "title": "Test Doc", "source_key": str(uuid.uuid4()),
          "status": "current", "ingestion_status": "completed"}
     ]
-    db.get_version.return_value = {
-        "id": str(uuid.uuid4()), "title": "Test Doc", "source_key": str(uuid.uuid4()),
-        "status": "current", "ingestion_status": "completed"
-    }
     db.get_answer.return_value = {
         "id": str(uuid.uuid4()), "question": "test?", "detected_scope": None,
         "retrieved_chunks": [], "reranked_chunks": [], "llm_prompt": "p",

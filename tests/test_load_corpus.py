@@ -233,7 +233,8 @@ async def test_load_all_saves_references_and_sources_and_loads_versions_in_order
     calls = []
 
     async def fake_load(db_, source_key, file, title, obtained_from, *rest, version_label=None,
-                        max_pages=None, parsed_cache=None):
+                        max_pages=None, parsed_cache=None, listed_path=None):
+        assert listed_path == file.name  # the path as written in corpus.yaml (relative to tmp_path)
         calls.append((source_key, file.name, version_label, max_pages))
         return "promoted", "d"
 
@@ -291,7 +292,7 @@ async def test_load_all_stops_a_source_after_a_failure(tmp_path):
     loaded = []
 
     async def fake_load(db_, source_key, file, title, obtained_from, *rest, version_label=None,
-                        max_pages=None, parsed_cache=None):
+                        max_pages=None, parsed_cache=None, listed_path=None):
         loaded.append(file.name)
         if file.name == "v1.pdf":
             raise RuntimeError("boom")

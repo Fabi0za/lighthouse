@@ -1,0 +1,187 @@
+"""Version lifecycle functions on a real Postgres: load, fail, retry, discard, promote, reject."""
+from __future__ import annotations
+
+import json
+
+import pytest
+
+from tests.db.conftest import make_flag, make_source, make_version
+from tests.db.test_functions import add_chunk, chunk_count, doc, promote
+
+psycopg = pytest.importorskip("psycopg")
+from psycopg import errors
+
+
+def begin(conn, source_key, file_sha256="f1", title="Doc", label=None, obtained_from=None, page_limit=None):
+    return str(conn.execute("select begin_load(%s, %s, %s, %s, %s, %s)",
+                            (source_key, title, label, obtained_from, page_limit, file_sha256)).fetchone()[0])
+
+
+def fail(conn, version_id, reason="load_failed", file="data/a.pdf", message="rate limit"):
+    return conn.execute("select fail_load(%s, %s, %s, %s)", (version_id, reason, file, message)).fetchone()[0]
+
+
+def flags_of(conn, source_key):
+    cur = conn.execute("select * from flags where source_key = %s order by id", (source_key,))
+    cols = [c.name for c in cur.description]
+    return [dict(zip(cols, r)) for r in cur.fetchall()]
+
+
+def flag_of(conn, version_id):
+    return next(f for f in flags_of(conn, doc(conn, version_id)["source_key"])
+                if f["id"] == doc(conn, version_id)["flag_id"])
+
+
+# --- begin, fail, retry, discard -------------------------------------------
+
+def test_begin_load_creates_loading_version_without_flag(pg):
+    s = make_source(pg)
+    v = begin(pg, s, label="V1", obtained_from="https://example.org/a.pdf", page_limit=4)
+    row = doc(pg, v)
+    assert (row["status"], row["flag_id"], row["version_label"], row["page_limit"]) == ("loading", None, "V1", 4)
+    assert flags_of(pg, s) == []
+
+
+def test_begin_load_resumes_same_bytes(pg):
+    s = make_source(pg)
+    v = begin(pg, s, file_sha256="f1")
+    add_chunk(pg, v)  # left by the interrupted attempt
+    assert begin(pg, s, file_sha256="f1") == v
+    assert chunk_count(pg, v) == 0
+    assert pg.execute("select count(*) from versions where source_key = %s", (s,)).fetchone()[0] == 1
+
+
+def test_fail_load_raises_one_flag(pg):
+    s = make_source(pg)
+    v = begin(pg, s)
+    first = fail(pg, v, message="rate limit")
+    assert begin(pg, s) == v  # retry with the same bytes
+    second = fail(pg, v, reason="parse_failed", message="timeout")
+    assert first == second
+    flags = flags_of(pg, s)
+    assert len(flags) == 1
+    f = flags[0]
+    assert (f["kind"], f["reason"], f["resolved_at"]) == ("check_failed", "parse_failed", None)
+    assert f["detail"] == {"file": "data/a.pdf", "message": "timeout"}
+    assert doc(pg, v)["status"] == "failed"
+
+
+def test_retry_success_resolves_flag(pg):
+    s = make_source(pg)
+    v = begin(pg, s)
+    fail(pg, v)
+    assert begin(pg, s) == v
+    assert doc(pg, v)["status"] == "loading"
+    promote(pg, v)
+    f = flag_of(pg, v)
+    assert (f["resolution"], f["resolved_by"]) == ("fixed", "system")
+    assert doc(pg, v)["status"] == "current"
+
+
+def test_discard_removes_version_and_resolves_flag(pg):
+    s = make_source(pg)
+    v = begin(pg, s)
+    add_chunk(pg, v)
+    f = fail(pg, v)
+    pg.execute("select discard_version(%s)", (v,))
+    assert pg.execute("select count(*) from versions where id = %s", (v,)).fetchone()[0] == 0
+    flag = next(x for x in flags_of(pg, s) if x["id"] == f)
+    assert (flag["resolution"], flag["resolved_by"]) == ("fixed", "system")
+
+
+def test_discard_refuses_current(pg):
+    s = make_source(pg)
+    v = begin(pg, s)
+    promote(pg, v)
+    with pytest.raises(errors.RaiseException):
+        pg.execute("select discard_version(%s)", (v,))
+
+
+# --- promote ---------------------------------------------------------------
+
+def test_promote_from_loading_needs_no_flag(pg):
+    s = make_source(pg)
+    v = begin(pg, s, obtained_from="https://example.org/v1.pdf")
+    assert promote(pg, v) == 0
+    row = doc(pg, v)
+    assert (row["status"], row["flag_id"]) == ("current", None)
+    assert row["became_current_at"] is not None
+    assert flags_of(pg, s) == []
+
+
+def test_promote_leaves_source_alone(pg):
+    s = make_source(pg, watch_address="https://example.org/watched.pdf")
+    before = pg.execute("select watch_address, confirmed_at from sources where key = %s", (s,)).fetchone()
+    promote(pg, begin(pg, s, obtained_from="https://example.org/elsewhere.pdf"))
+    after = pg.execute("select watch_address, confirmed_at from sources where key = %s", (s,)).fetchone()
+    assert after == before
+
+
+def test_promote_retires_previous_and_counts_its_answers(pg):
+    s = make_source(pg)
+    v1 = make_version(pg, s, text_sha256="t1", file_sha256="f1")
+    pg.execute("update versions set parsed_output = %s where id = %s", (json.dumps({"x": 1}), v1))
+    add_chunk(pg, v1)
+    promote(pg, v1)
+    for _ in range(2):
+        pg.execute("select log_answer(%s::jsonb, %s::uuid[])", (json.dumps(
+            {"question": "q", "llm_prompt": "p", "llm_response": "r", "model_used": "m", "latency_ms": 1}), [v1]))
+    v2 = make_version(pg, s, text_sha256="t2")
+    add_chunk(pg, v2)
+    assert promote(pg, v2) == 2
+    old = doc(pg, v1)
+    assert old["status"] == "retired"
+    assert old["retired_at"] is not None
+    assert chunk_count(pg, v1) == 0
+    assert old["parsed_output"] == {"x": 1}
+    assert (old["file_sha256"], old["text_sha256"]) == ("f1", "t1")
+    assert doc(pg, v2)["status"] == "current"
+    assert chunk_count(pg, v2) == 1
+
+
+def test_failed_promotion_leaves_previous_current(pg_db_url):
+    with psycopg.connect(pg_db_url) as conn:
+        s = make_source(conn)
+        v1 = make_version(conn, s, text_sha256="t1")
+        add_chunk(conn, v1)
+        promote(conn, v1)
+        v2 = make_version(conn, s, status="failed", text_sha256="t2")
+        conn.commit()
+        with pytest.raises(errors.RaiseException):
+            promote(conn, v2)
+        conn.rollback()
+    with psycopg.connect(pg_db_url) as fresh:
+        assert doc(fresh, v1)["status"] == "current"
+        assert chunk_count(fresh, v1) == 1
+        assert doc(fresh, v2)["status"] == "failed"
+
+
+@pytest.mark.parametrize("status", ["current", "retired", "failed"])
+def test_promote_refuses_other_statuses(pg, status):
+    s = make_source(pg)
+    d = make_version(pg, s, status=status, text_sha256="t1",
+                     retired_at="2026-01-01" if status == "retired" else None)
+    with pytest.raises(errors.RaiseException):
+        promote(pg, d)
+
+
+# --- reject ----------------------------------------------------------------
+
+def test_reject_version(pg):
+    s = make_source(pg)
+    d = make_version(pg, s, status="held", text_sha256="t1")
+    add_chunk(pg, d)
+    pg.execute("select reject_version(%s)", (d,))
+    row = doc(pg, d)
+    assert row["status"] == "retired"
+    assert row["became_current_at"] is None
+    assert chunk_count(pg, d) == 0
+    f = flag_of(pg, d)
+    assert (f["resolution"], f["resolved_by"]) == ("rejected", "person")
+
+
+def test_reject_requires_held(pg):
+    s = make_source(pg)
+    d = make_version(pg, s, text_sha256="t1")
+    with pytest.raises(errors.RaiseException):
+        pg.execute("select reject_version(%s)", (d,))

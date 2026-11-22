@@ -35,6 +35,9 @@ def cached_output(parsed_cache: Path | None, file_hash: str) -> Path | None:
     return path if path.is_file() else None
 
 
+UNFINISHED = ("loading", "failed")
+
+
 async def load_version(
     db,
     source_key: str,
@@ -48,12 +51,16 @@ async def load_version(
     version_label: str | None = None,
     max_pages: int | None = None,
     parsed_cache: Path | None = None,
+    listed_path: str | None = None,
 ) -> tuple[str, str]:
     """Load file as a version of the source with source_key. Returns (action, version_id).
 
     action is "skipped" (these bytes are already a version), "dismissed" (new bytes,
-    same text: repackaging) or "promoted" (new content, now current).
-    On failure the version is marked failed and its flag stays open.
+    same text: repackaging) or "promoted" (new content, now current). A routine load
+    raises no flag. On failure the version is marked failed with a check_failed flag
+    (parse_failed if the parser failed, load_failed otherwise) naming listed_path, the
+    file as listed in corpus.yaml (default: its file name); a later load of the same
+    bytes takes the version up again and, on success, resolves that flag.
 
     With parsed_cache, a file <file_sha256>.json in that directory is used as the
     parser's output instead of parsing (max_pages is then ignored: the cached output
@@ -63,18 +70,14 @@ async def load_version(
     file = Path(file)
     file_hash = file_sha256(file)
     versions = db.list_versions(source_key)
-
     for v in versions:
-        if v.get("file_sha256") == file_hash:
-            if v.get("status") != "pending":
-                return "skipped", v["id"]
-            db.delete_pending_version(v["id"], "dismissed (reload)")
-    versions = [v for v in versions if v.get("file_sha256") != file_hash]
+        if v.get("file_sha256") == file_hash and v.get("status") not in UNFINISHED:
+            return "skipped", v["id"]
 
-    doc = db.hold_version(source_key, title, version_label, obtained_from, max_pages, file_hash)
-    doc_id = doc["id"]
+    version_id = db.begin_load(source_key, title, version_label, obtained_from, max_pages, file_hash)
+    others = [v for v in versions if str(v["id"]) != str(version_id)]
+    reason = "parse_failed"
     try:
-        db.update_version(doc_id, {"ingestion_status": "processing"})
         cached = cached_output(parsed_cache, file_hash)
         if cached:
             raw_output = json.loads(cached.read_text(encoding="utf-8"))
@@ -83,18 +86,18 @@ async def load_version(
             with tempfile.TemporaryDirectory() as tmp:
                 parse_path = first_pages(file, max_pages, Path(tmp)) if max_pages else file
                 raw_output, sections = await parser.parse_pdf(str(parse_path))
+        reason = "load_failed"
 
         text_hash = text_sha256(sections)
-        for v in versions:
-            if v.get("text_sha256") != text_hash or v["id"] == doc_id:
+        for v in others:
+            if v.get("text_sha256") != text_hash:
                 continue
-            if v.get("status") == "pending":
-                # Left by an interrupted load of other bytes with the same text.
-                db.delete_pending_version(v["id"], "dismissed (reload)")
+            if v.get("status") in UNFINISHED:
+                db.discard_version(v["id"])  # an earlier, unfinished load of other bytes
                 continue
-            db.delete_pending_version(doc_id, "dismissed (same text)")
+            db.discard_version(version_id)
             return "dismissed", v["id"]
-        db.set_text_fingerprint(doc_id, text_hash, raw_output)
+        db.set_text_fingerprint(version_id, text_hash, raw_output)
 
         chunks = chunker.chunk_sections(sections, doc_title=display_title(title, version_label))
         if not chunks:
@@ -102,7 +105,7 @@ async def load_version(
         embeddings = await embedder.embed_texts([c.content for c in chunks])
         db.insert_chunks([
             {
-                "version_id": doc_id,
+                "version_id": version_id,
                 "content": c.content,
                 "section_title": c.section_title,
                 "page_number": c.page_number,
@@ -112,10 +115,8 @@ async def load_version(
             }
             for i, c in enumerate(chunks)
         ])
-        db.update_version(doc_id, {"ingestion_status": "completed"})
-    except Exception:
-        db.update_version(doc_id, {"ingestion_status": "failed"})
+        db.promote_version(version_id)
+    except Exception as e:
+        db.fail_load(version_id, reason, listed_path or file.name, f"{type(e).__name__}: {e}")
         raise
-
-    db.promote_version(doc_id, "promoted (auto)")
-    return "promoted", doc_id
+    return "promoted", version_id

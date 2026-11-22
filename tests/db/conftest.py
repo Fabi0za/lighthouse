@@ -116,22 +116,24 @@ def resolve_flag(conn, flag_id: int, resolution: str = "rejected", resolved_by: 
 def make_version(
     conn,
     source_key: str,
-    status: str = "pending",
-    flag_id: str | None = None,
+    status: str = "loading",
+    flag_id: int | None = None,
     text_sha256: str | None = None,
     file_sha256: str | None = None,
-    ingestion_status: str = "completed",
     retired_at: str | None = None,
     obtained_from: str | None = None,
     version_label: str | None = None,
     page_limit: int | None = None,
 ) -> str:
-    if status == "pending" and flag_id is None:
+    """A version; held gets an open candidate flag and failed a load_failed flag unless flag_id is given."""
+    if flag_id is None and status == "held":
         flag_id = make_flag(conn, source_key)
+    if flag_id is None and status == "failed":
+        flag_id = make_flag(conn, source_key, "check_failed", "load_failed", '{"file": "data/a.pdf"}')
     return str(conn.execute(
         "insert into versions (source_key, status, flag_id, title, version_label, obtained_from, "
-        "page_limit, file_sha256, text_sha256, ingestion_status, retired_at) "
-        "values (%s, %s, %s, 'Doc', %s, %s, %s, %s, %s, %s, %s) returning id",
+        "page_limit, file_sha256, text_sha256, retired_at) "
+        "values (%s, %s, %s, 'Doc', %s, %s, %s, %s, %s, %s) returning id",
         (source_key, status, flag_id, version_label, obtained_from, page_limit,
-         file_sha256 or uuid.uuid4().hex, text_sha256, ingestion_status, retired_at),
+         file_sha256 or uuid.uuid4().hex, text_sha256, retired_at),
     ).fetchone()[0])

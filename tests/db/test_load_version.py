@@ -1,12 +1,11 @@
-"""load_version against real Postgres constraints, through a psycopg stand-in for DatabaseClient.
+"""load_version against a real Postgres, through a psycopg stand-in for DatabaseClient.
 
-The stand-in issues the same writes as DatabaseClient (one statement per client call, each
-committed), so the unique text fingerprint, the open-flag rule and promote_version all apply.
+The stand-in calls the same SQL functions as DatabaseClient, one committed call each as over
+REST, so every rule of the schema applies: statuses, flags, the unique text fingerprint.
 """
 from __future__ import annotations
 
 import json
-from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
@@ -28,7 +27,7 @@ class PgDb:
     def __init__(self, conn):
         self.c = conn
 
-    def _one(self, sql, args=()):
+    def _call(self, sql, args=()):
         try:
             row = self.c.execute(sql, args).fetchone()
         except Exception:
@@ -40,27 +39,19 @@ class PgDb:
     def list_versions(self, source_key):
         return self.c.execute("select * from versions where source_key = %s", (source_key,)).fetchall()
 
-    def get_version(self, doc_id):
-        return self.c.execute("select * from versions where id = %s", (doc_id,)).fetchone()
+    def begin_load(self, source_key, title, version_label, obtained_from, page_limit, file_sha256):
+        return str(self._call("select begin_load(%s, %s, %s, %s, %s, %s) as id",
+                              (source_key, title, version_label, obtained_from, page_limit, file_sha256))["id"])
 
-    def hold_version(self, source_key, title, version_label, obtained_from, page_limit, file_sha256):
-        flag = self._one(
-            "insert into flags (source_key, kind, reason, detail) "
-            "values (%s, 'candidate', 'possible_successor', %s::jsonb) returning id",
-            (source_key, json.dumps({"address": obtained_from or ""})))
-        return self._one(
-            "insert into versions (source_key, status, flag_id, title, version_label, obtained_from, "
-            "page_limit, file_sha256) values (%s, 'pending', %s, %s, %s, %s, %s, %s) returning *",
-            (source_key, flag["id"], title, version_label, obtained_from, page_limit, file_sha256))
+    def fail_load(self, version_id, reason, file, message):
+        return self._call("select fail_load(%s, %s, %s, %s) as id", (version_id, reason, file, message))["id"]
 
-    def update_version(self, doc_id, updates):
-        (k, v), = updates.items()
-        self._one(f"update versions set {k} = %s where id = %s returning id", (v, doc_id))
+    def discard_version(self, version_id):
+        self._call("select discard_version(%s)", (version_id,))
 
-    def set_text_fingerprint(self, doc_id, text_sha256, parsed_output):
-        self._one("update versions set text_sha256 = %s, parsed_output = %s where id = %s returning id",
-                  (text_sha256, json.dumps(parsed_output), doc_id))
-
+    def set_text_fingerprint(self, version_id, text_sha256, parsed_output):
+        self._call("update versions set text_sha256 = %s, parsed_output = %s where id = %s returning id",
+                   (text_sha256, json.dumps(parsed_output), version_id))
 
     def insert_chunks(self, chunks):
         for ch in chunks:
@@ -71,18 +62,8 @@ class PgDb:
                  ch["chunk_index"], str(ch["embedding"]), ch["token_count"]))
         self.c.commit()
 
-    def promote_version(self, doc_id, resolution):
-        self.c.execute("select promote_version(%s, %s)", (doc_id, resolution))
-        self.c.commit()
-
-    def delete_pending_version(self, doc_id, resolution):
-        doc = self.get_version(doc_id)
-        assert doc and doc["status"] == "pending"
-        self.c.execute("delete from chunks where version_id = %s", (doc_id,))
-        self.c.execute("delete from versions where id = %s", (doc_id,))
-        self.c.execute("update flags set resolved_at = %s, resolution = 'fixed', resolved_by = 'system' "
-                       "where id = %s", (datetime.now(UTC), doc["flag_id"]))
-        self.c.commit()
+    def promote_version(self, version_id, resolved_by="system"):
+        return self._call("select promote_version(%s, %s) as n", (version_id, resolved_by))["n"]
 
 
 def _pdf(path: Path, height: int) -> Path:
@@ -93,9 +74,10 @@ def _pdf(path: Path, height: int) -> Path:
     return path
 
 
-def _deps(fail_embedding: bool):
+def _deps(fail_embedding: bool = False, fail_parse: bool = False):
     parser = MagicMock()
-    parser.parse_pdf = AsyncMock(return_value=({"result": {}}, SECTIONS))
+    parser.parse_pdf = AsyncMock(side_effect=TimeoutError("parser timed out")) if fail_parse \
+        else AsyncMock(return_value=({"result": {}}, SECTIONS))
     chunker = MagicMock()
     chunker.chunk_sections.return_value = [
         Chunk(content="c", section_title="S", page_number=1, chunk_index=0, token_count=3)]
@@ -105,12 +87,13 @@ def _deps(fail_embedding: bool):
     return parser, chunker, embedder
 
 
-def _state(conn, source_key):
-    docs = conn.execute("select status, ingestion_status from versions where source_key = %s",
-                        (source_key,)).fetchall()
-    open_flags = conn.execute("select count(*) as n from flags where source_key = %s and resolved_at is null",
-                              (source_key,)).fetchone()["n"]
-    return sorted((d["status"], d["ingestion_status"]) for d in docs), open_flags
+def _statuses(conn, source_key):
+    return sorted(r["status"] for r in conn.execute(
+        "select status from versions where source_key = %s", (source_key,)).fetchall())
+
+
+def _flags(conn, source_key):
+    return conn.execute("select * from flags where source_key = %s order by id", (source_key,)).fetchall()
 
 
 @pytest.fixture
@@ -122,43 +105,71 @@ def db(pg_db_url):
 @pytest.fixture
 def source(db):
     make_reference_rows(db.c)
-    db.c.commit()
     db.c.execute("insert into sources (key, level) values ('s', 'operator')")
     db.c.execute("insert into source_scopes (source_key, scope_key) values ('s', 'bkw')")
     db.c.commit()
     return "s"
 
 
-async def test_failed_load_after_text_fingerprint_reloads_cleanly(db, source, tmp_path):
+async def test_routine_load_raises_no_flag(db, source, tmp_path):
+    action, _ = await load_version(db, source, _pdf(tmp_path / "a.pdf", 200), "Doc", None, *_deps())
+    assert action == "promoted"
+    assert _statuses(db.c, source) == ["current"]
+    assert _flags(db.c, source) == []
+
+
+async def test_repackaged_file_leaves_no_row_and_no_flag(db, source, tmp_path):
+    await load_version(db, source, _pdf(tmp_path / "a.pdf", 200), "Doc", None, *_deps())
+    action, _ = await load_version(db, source, _pdf(tmp_path / "b.pdf", 300), "Doc", None, *_deps())
+    assert action == "dismissed"
+    assert _statuses(db.c, source) == ["current"]
+    assert _flags(db.c, source) == []
+
+
+async def test_failed_parse_raises_parse_failed(db, source, tmp_path):
+    with pytest.raises(TimeoutError):
+        await load_version(db, source, _pdf(tmp_path / "a.pdf", 200), "Doc", None,
+                           *_deps(fail_parse=True), listed_path="data/a.pdf")
+    assert _statuses(db.c, source) == ["failed"]
+    (flag,) = _flags(db.c, source)
+    assert (flag["kind"], flag["reason"], flag["resolved_at"]) == ("check_failed", "parse_failed", None)
+    assert flag["detail"] == {"file": "data/a.pdf", "message": "TimeoutError: parser timed out"}
+
+
+async def test_failed_embedding_raises_load_failed_then_retry_fixes_it(db, source, tmp_path):
     f = _pdf(tmp_path / "v1.pdf", 200)
     with pytest.raises(RuntimeError):
         await load_version(db, source, f, "Doc", None, *_deps(fail_embedding=True))
-    assert _state(db.c, source) == ([("pending", "failed")], 1)
+    assert _statuses(db.c, source) == ["failed"]
+    assert [x["reason"] for x in _flags(db.c, source)] == ["load_failed"]
 
-    action, _ = await load_version(db, source, f, "Doc", None, *_deps(fail_embedding=False))
+    action, _ = await load_version(db, source, f, "Doc", None, *_deps())
 
     assert action == "promoted"
-    assert _state(db.c, source) == ([("current", "completed")], 0)
+    assert _statuses(db.c, source) == ["current"]
+    (flag,) = _flags(db.c, source)
+    assert (flag["resolution"], flag["resolved_by"]) == ("fixed", "system")
 
 
-async def test_stale_pending_row_with_same_text_but_new_bytes_does_not_block(db, source, tmp_path):
+async def test_failed_version_replaced_by_other_bytes_with_same_text(db, source, tmp_path):
     with pytest.raises(RuntimeError):
-        await load_version(db, source, _pdf(tmp_path / "a.pdf", 200), "Doc", None,
-                           *_deps(fail_embedding=True))
+        await load_version(db, source, _pdf(tmp_path / "a.pdf", 200), "Doc", None, *_deps(fail_embedding=True))
 
-    action, _ = await load_version(db, source, _pdf(tmp_path / "b.pdf", 300), "Doc", None,
-                                   *_deps(fail_embedding=False))
+    action, _ = await load_version(db, source, _pdf(tmp_path / "b.pdf", 300), "Doc", None, *_deps())
 
     assert action == "promoted"
-    assert _state(db.c, source) == ([("current", "completed")], 0)
+    assert _statuses(db.c, source) == ["current"]
+    (flag,) = _flags(db.c, source)
+    assert flag["resolution"] == "fixed"
 
 
-async def test_repackaged_current_version_is_dismissed_without_open_flag(db, source, tmp_path):
-    await load_version(db, source, _pdf(tmp_path / "a.pdf", 200), "Doc", None,
-                       *_deps(fail_embedding=False))
+async def test_crash_while_loading_is_resumed(db, source, tmp_path):
+    f = _pdf(tmp_path / "a.pdf", 200)
+    from app.ingestion.fingerprint import file_sha256
+    db.begin_load(source, "Doc", None, None, None, file_sha256(f))  # then the process died
 
-    action, _ = await load_version(db, source, _pdf(tmp_path / "b.pdf", 300), "Doc", None,
-                                   *_deps(fail_embedding=False))
+    action, _ = await load_version(db, source, f, "Doc", None, *_deps())
 
-    assert action == "dismissed"
-    assert _state(db.c, source) == ([("current", "completed")], 0)
+    assert action == "promoted"
+    assert _statuses(db.c, source) == ["current"]
+    assert _flags(db.c, source) == []

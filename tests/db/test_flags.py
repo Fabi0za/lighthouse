@@ -97,7 +97,7 @@ def test_detail_shape(pg, reason, detail, ok):
 def test_flag_not_resolvable_while_held(pg):
     s = make_source(pg)
     f = make_flag(pg, s)
-    make_version(pg, s, flag_id=f)
+    make_version(pg, s, status="held", flag_id=f)
     with pytest.raises(errors.CheckViolation):
         resolve_flag(pg, f)
 
