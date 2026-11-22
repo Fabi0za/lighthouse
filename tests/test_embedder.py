@@ -62,3 +62,57 @@ def test_embedding_input_has_the_header_once():
 def test_embedding_input_without_section_or_label():
     from app.ingestion.embedder import embedding_input
     assert embedding_input("T", None, "", "text") == "[T]\ntext"
+
+
+def _rate_limited():
+    from cohere.errors import TooManyRequestsError
+    return TooManyRequestsError(body={"message": "trial key: 100000 tokens per minute"})
+
+
+def _paced(retries=5):
+    sleep = AsyncMock()
+    return Embedder(api_key="k", model="m", dimensions=1536, rate_limit_wait_seconds=61,
+                    rate_limit_retries=retries, sleep=sleep), sleep
+
+
+@pytest.mark.asyncio
+async def test_rate_limit_is_waited_out(capsys):
+    embedder, sleep = _paced()
+    mock = AsyncMock(side_effect=[_rate_limited(), _response(2)])
+    with patch.object(embedder.client, "embed", mock):
+        result = await embedder.embed_texts(["a", "b"])
+    assert len(result) == 2
+    sleep.assert_awaited_once_with(61)
+    assert "embedding rate limit: waiting 61 s (retry 1 of 5)" in capsys.readouterr().out
+
+
+@pytest.mark.asyncio
+async def test_gives_up_after_retries():
+    from cohere.errors import TooManyRequestsError
+    embedder, sleep = _paced(retries=5)
+    mock = AsyncMock(side_effect=[_rate_limited() for _ in range(6)])
+    with patch.object(embedder.client, "embed", mock), pytest.raises(TooManyRequestsError):
+        await embedder.embed_texts(["a"])
+    assert sleep.await_count == 5
+    assert mock.call_count == 6
+
+
+@pytest.mark.asyncio
+async def test_other_errors_not_retried():
+    embedder, sleep = _paced()
+    mock = AsyncMock(side_effect=RuntimeError("bad request"))
+    with patch.object(embedder.client, "embed", mock), pytest.raises(RuntimeError):
+        await embedder.embed_texts(["a"])
+    sleep.assert_not_awaited()
+    assert mock.call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_waits_only_for_the_failing_batch():
+    embedder, sleep = _paced()
+    texts = [f"t{i}" for i in range(MAX_BATCH + 5)]
+    mock = AsyncMock(side_effect=[_response(MAX_BATCH), _rate_limited(), _response(5)])
+    with patch.object(embedder.client, "embed", mock):
+        result = await embedder.embed_texts(texts)
+    assert len(result) == MAX_BATCH + 5
+    assert [len(c.kwargs["texts"]) for c in mock.call_args_list] == [MAX_BATCH, 5, 5]

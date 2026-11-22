@@ -20,6 +20,8 @@ def build_dependencies():
         api_key=settings.cohere_api_key,
         model=settings.embedding_model,
         dimensions=settings.embedding_dimensions,
+        rate_limit_wait_seconds=settings.embed_rate_limit_wait_seconds,
+        rate_limit_retries=settings.embed_rate_limit_retries,
     )
 
     llm = LLMClient(api_key=settings.anthropic_api_key, model=settings.llm_model)

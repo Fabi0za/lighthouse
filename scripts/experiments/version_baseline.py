@@ -98,7 +98,9 @@ async def main():
     v12, v13 = pick_versions(db.list_versions(SOURCE_KEY), V12_LABEL, V13_LABEL)
     label = {v12["id"]: "V1.2", v13["id"]: "V1.3"}
 
-    embedder = Embedder(s.cohere_api_key, s.embedding_model, s.embedding_dimensions)
+    embedder = Embedder(s.cohere_api_key, s.embedding_model, s.embedding_dimensions,
+                        rate_limit_wait_seconds=s.embed_rate_limit_wait_seconds,
+                        rate_limit_retries=s.embed_rate_limit_retries)
     llm = LLMClient(api_key=s.anthropic_api_key, model=s.llm_model)
     query_parser = QueryParser(known_scopes=db.get_known_scopes())
     reranker = CohereReranker(api_key=s.cohere_api_key, top_n=s.rerank_top_n, model=s.rerank_model)

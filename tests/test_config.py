@@ -32,3 +32,10 @@ def test_confirmation_age_can_be_set(tmp_path):
     env = tmp_path / ".env"
     env.write_text(REQUIRED + "CONFIRMATION_MAX_AGE_DAYS=90\n", encoding="utf-8")
     assert Settings(_env_file=env).confirmation_max_age_days == 90
+
+
+def test_embedding_rate_limit_defaults(tmp_path):
+    env = tmp_path / ".env"
+    env.write_text(REQUIRED, encoding="utf-8")
+    s = Settings(_env_file=env)
+    assert (s.embed_rate_limit_wait_seconds, s.embed_rate_limit_retries) == (61, 5)

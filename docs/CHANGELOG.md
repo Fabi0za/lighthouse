@@ -46,6 +46,8 @@ Each entry: what changed and why, then the evidence. Measurements live in [basel
   Evidence: database tests for the settings references and checks; pipeline, logger, API and settings-row tests; a hash guard on `prompts.py` for `PROMPT_VERSION`; 367 tests pass with the database tests.
 - **Parsed output is stored without the parser's links (`pdf_url`, `studio_link`, each block's `image_url`).** They point into the parser's service and are no part of the version's content.
   Evidence: `strip_links` tests; on all 11 cached parser outputs the extracted sections are identical with and without the links; 370 tests pass with the database tests.
+- **Embedding waits out a rate-limit error and retries that batch (61 s, up to 5 times, both settings) instead of failing the load.** The last reload failed 5 versions on Cohere's per-minute limit and needed two reruns.
+  Evidence: embedder tests: one rate-limit error is waited out, six give up after five waits, other errors are not retried, only the failing batch is re-sent; 375 tests pass with the database tests.
 
 ## 2026-11-21
 

@@ -327,6 +327,8 @@ async def main() -> int:
         api_key=settings.cohere_api_key,
         model=settings.embedding_model,
         dimensions=settings.embedding_dimensions,
+        rate_limit_wait_seconds=settings.embed_rate_limit_wait_seconds,
+        rate_limit_retries=settings.embed_rate_limit_retries,
     )
     try:
         counts = await load_all(corpus, repo_root, db, parser, chunker, embedder,
