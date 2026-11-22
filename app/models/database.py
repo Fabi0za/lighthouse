@@ -146,19 +146,10 @@ class DatabaseClient:
     def insert_chunks(self, chunks: list[dict[str, Any]]) -> None:
         self.client.table("document_chunks").insert(chunks).execute()
 
-    def delete_chunks_for_document(self, doc_id: uuid.UUID) -> None:
-        self.client.table("document_chunks").delete().eq("document_id", str(doc_id)).execute()
-
     def vector_search(self, query_embedding: list[float], top_k: int = 20) -> list[dict[str, Any]]:
         return self.client.rpc(
             "match_document_chunks",
             {"query_embedding": query_embedding, "match_count": top_k},
-        ).execute().data
-
-    def keyword_search(self, query: str, top_k: int = 20) -> list[dict[str, Any]]:
-        return self.client.rpc(
-            "keyword_search_chunks",
-            {"search_query": query, "match_count": top_k},
         ).execute().data
 
     # --- answers ------------------------------------------------------------

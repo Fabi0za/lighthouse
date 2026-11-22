@@ -143,7 +143,7 @@ app/
 ├── pipeline.py            # Query orchestrator
 ├── models/
 │   ├── schemas.py         # Pydantic models
-│   └── database.py        # Supabase client (vector + keyword search)
+│   └── database.py        # Supabase client
 ├── ingestion/
 │   ├── parser.py          # Reducto PDF parser
 │   ├── chunker.py         # Table-aware, section-based chunking
@@ -151,7 +151,7 @@ app/
 ├── retrieval/
 │   ├── query_parser.py    # Grid provider detection
 │   ├── reranker.py        # Cohere neural reranker
-│   └── search.py          # Vector search (+ hybrid search infrastructure)
+│   └── search.py          # Vector search
 ├── generation/
 │   ├── llm.py             # Answer model client (Anthropic)
 │   ├── prompts.py         # Prompt templates

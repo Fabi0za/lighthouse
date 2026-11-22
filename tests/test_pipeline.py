@@ -103,3 +103,11 @@ async def test_pipeline_logs_distinct_versions_of_the_top_chunks(mock_deps):
     pipeline = QueryPipeline(**mock_deps)
     await pipeline.run("q")
     assert mock_deps["logger"].log.call_args.kwargs["document_ids"] == ["d1", "d2"]
+
+
+@pytest.mark.asyncio
+async def test_pipeline_returns_retrieved_and_reranked_chunks(mock_deps):
+    pipeline = QueryPipeline(**mock_deps)
+    result = await pipeline.run("How do I wire X for GridCo?")
+    assert result["retrieved_chunks"] == mock_deps["vector_search"].search.return_value
+    assert result["reranked_chunks"] == mock_deps["reranker"].rerank.return_value

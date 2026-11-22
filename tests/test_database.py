@@ -30,11 +30,6 @@ def test_list_documents(db, mock_supabase):
     assert len(result) == 1
 
 
-def test_delete_document_chunks(db, mock_supabase):
-    db.delete_chunks_for_document(uuid.uuid4())
-    mock_supabase.table.assert_called_with("document_chunks")
-
-
 def test_insert_chunks(db, mock_supabase):
     chunks = [{
         "document_id": str(uuid.uuid4()),
@@ -157,11 +152,6 @@ def test_get_known_scopes(db, mock_supabase):
     mock_supabase.execute.return_value = MagicMock(data=[{"scope": "A"}, {"scope": "B"}, {"scope": "A"}])
     assert sorted(db.get_known_scopes()) == ["A", "B"]
     mock_supabase.table.assert_called_with("source_scopes")
-
-
-def test_removed_methods_are_gone(db):
-    assert not hasattr(db, "insert_document")
-    assert not hasattr(db, "get_known_providers")
 
 
 def test_get_scopes(db, mock_supabase):
