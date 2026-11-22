@@ -43,9 +43,11 @@ class PgDb:
     def get_version(self, doc_id):
         return self.c.execute("select * from versions where id = %s", (doc_id,)).fetchone()
 
-    def hold_version(self, source_key, title, version_label, obtained_from, page_limit, file_sha256,
-                     kind="new_version"):
-        flag = self._one("insert into flags (source_key, kind) values (%s, %s) returning id", (source_key, kind))
+    def hold_version(self, source_key, title, version_label, obtained_from, page_limit, file_sha256):
+        flag = self._one(
+            "insert into flags (source_key, kind, reason, detail) "
+            "values (%s, 'candidate', 'possible_successor', %s::jsonb) returning id",
+            (source_key, json.dumps({"address": obtained_from or ""})))
         return self._one(
             "insert into versions (source_key, status, flag_id, title, version_label, obtained_from, "
             "page_limit, file_sha256) values (%s, 'pending', %s, %s, %s, %s, %s, %s) returning *",
@@ -78,8 +80,8 @@ class PgDb:
         assert doc and doc["status"] == "pending"
         self.c.execute("delete from chunks where version_id = %s", (doc_id,))
         self.c.execute("delete from versions where id = %s", (doc_id,))
-        self.c.execute("update flags set resolved_at = %s, resolution = %s where id = %s",
-                       (datetime.now(UTC), resolution, doc["flag_id"]))
+        self.c.execute("update flags set resolved_at = %s, resolution = 'fixed', resolved_by = 'system' "
+                       "where id = %s", (datetime.now(UTC), doc["flag_id"]))
         self.c.commit()
 
 

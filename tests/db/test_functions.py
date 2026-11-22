@@ -60,7 +60,7 @@ def test_promote_first_version(pg):
     assert row["status"] == "current"
     assert row["became_current_at"] is not None
     assert flag_of(pg, d)["resolved_at"] is not None
-    assert flag_of(pg, d)["resolution"] == "promoted (auto)"
+    assert flag_of(pg, d)["resolution"] == "promoted"
 
 
 def test_promote_leaves_source_alone(pg):

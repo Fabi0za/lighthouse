@@ -87,12 +87,12 @@ class DatabaseClient:
         obtained_from: str | None,
         page_limit: int | None,
         file_sha256: str,
-        kind: str = "new_version",
     ) -> dict[str, Any]:
         """Insert the flag that holds a new version, then the pending version itself."""
-        flag = self.client.table("flags").insert(
-            {"source_key": source_key, "kind": kind}
-        ).execute().data[0]
+        flag = self.client.table("flags").insert({
+            "source_key": source_key, "kind": "candidate", "reason": "possible_successor",
+            "detail": {"address": obtained_from or ""},
+        }).execute().data[0]
         return self.client.table("versions").insert({
             "source_key": source_key,
             "status": "pending",
@@ -129,7 +129,8 @@ class DatabaseClient:
         self.client.table("versions").delete().eq("id", str(doc_id)).execute()
         self.client.table("flags").update({
             "resolved_at": datetime.now(UTC).isoformat(),
-            "resolution": resolution,
+            "resolution": "fixed",
+            "resolved_by": "system",
         }).eq("id", doc["flag_id"]).execute()
 
     # --- chunks and search --------------------------------------------------

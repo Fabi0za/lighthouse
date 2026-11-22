@@ -98,11 +98,19 @@ def make_source(conn, key: str = "source", watch_address: str | None = None,
     return key
 
 
-def make_flag(conn, source_key: str, kind: str = "new_version") -> str:
-    return str(conn.execute(
-        "insert into flags (source_key, kind) values (%s, %s) returning id",
-        (source_key, kind),
-    ).fetchone()[0])
+def make_flag(conn, source_key: str, kind: str = "candidate", reason: str = "possible_successor",
+              detail: str = '{"address": "https://example.org/x.pdf"}') -> int:
+    return conn.execute(
+        "insert into flags (source_key, kind, reason, detail) values (%s, %s, %s, %s::jsonb) returning id",
+        (source_key, kind, reason, detail),
+    ).fetchone()[0]
+
+
+def resolve_flag(conn, flag_id: int, resolution: str = "rejected", resolved_by: str = "person") -> None:
+    conn.execute(
+        "update flags set resolved_at = now(), resolution = %s, resolved_by = %s where id = %s",
+        (resolution, resolved_by, flag_id),
+    )
 
 
 def make_version(

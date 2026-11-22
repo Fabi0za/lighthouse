@@ -58,7 +58,8 @@ def test_hold_version_inserts_flag_before_pending_document(db, mock_supabase):
     tables = [c.args[0] for c in mock_supabase.table.call_args_list]
     assert tables == ["flags", "versions"]
     flag_row = mock_supabase.insert.call_args_list[0].args[0]
-    assert flag_row == {"source_key": source_key, "kind": "new_version"}
+    assert flag_row == {"source_key": source_key, "kind": "candidate", "reason": "possible_successor",
+                        "detail": {"address": "https://example.org/v2.pdf"}}
     doc_row = mock_supabase.insert.call_args_list[1].args[0]
     assert doc_row["flag_id"] == flag_id
     assert doc_row["status"] == "pending"
@@ -68,12 +69,6 @@ def test_hold_version_inserts_flag_before_pending_document(db, mock_supabase):
     assert doc_row["obtained_from"] == "https://example.org/v2.pdf"
     assert "file_path" not in doc_row
     assert doc["id"] == doc_id
-
-
-def test_hold_version_passes_kind(db, mock_supabase):
-    mock_supabase.execute.side_effect = [MagicMock(data=[{"id": "f"}]), MagicMock(data=[{"id": "d"}])]
-    db.hold_version("s", "T", None, None, None, "abc", kind="candidate")
-    assert mock_supabase.insert.call_args_list[0].args[0]["kind"] == "candidate"
 
 
 def test_promote_version_calls_rpc(db, mock_supabase):
@@ -118,7 +113,7 @@ def test_delete_pending_version_deletes_then_resolves_flag(db, mock_supabase):
     tables = [c.args[0] for c in mock_supabase.table.call_args_list]
     assert tables == ["versions", "chunks", "versions", "flags"]
     update = mock_supabase.update.call_args.args[0]
-    assert update["resolution"] == "dismissed (same text)"
+    assert (update["resolution"], update["resolved_by"]) == ("fixed", "system")
     assert "resolved_at" in update
 
 

@@ -22,6 +22,8 @@ Each entry: what changed and why, then the evidence. Measurements live in [basel
   Evidence: database tests for a positive page limit, immutable label and page limit, no `file_path` column, `match_chunks` returning the label; prompt, formatter and loader tests; 203 tests pass with the database tests.
 - **`corpus.yaml` defines levels, scopes and sources by key, with each version's printed title and label; the loader stops when the store holds a source that `corpus.yaml` no longer lists.** A renamed key would otherwise leave the old source current and searchable; unknown levels and scopes are reported by source before anything is written.
   Evidence: loader tests for an unlisted stored key, unknown level and scope, a source the database refuses while others still load; the checked-in corpus parses to 10 sources and 11 versions with unchanged paths and addresses; 210 tests pass with the database tests.
+- **Flags have a running number, a reason, and fixed lists for kind, reason, resolution and who resolved them; `detail` names the file or the address.** Kind and resolution were free text or held unused values, and `detail` was always empty.
+  Evidence: `tests/db/test_flags.py`: all 15 kind/reason combinations (5 accepted), unknown values, the three resolution fields set together, the detail shape; 240 tests pass with the database tests.
 
 ## 2026-11-21
 

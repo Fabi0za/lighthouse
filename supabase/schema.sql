@@ -88,16 +88,36 @@ create constraint trigger source_scopes_scope_required
 -- ---------------------------------------------------------------------------
 -- Flags: cases the system could not settle, or that it holds for a person
 -- ---------------------------------------------------------------------------
+-- A flag is a case a person must handle. id is the running number people use ("flag 12").
 create table flags (
-    id uuid primary key default gen_random_uuid(),
+    id bigint generated always as identity primary key,
     source_key text not null references sources(key),
     kind text not null
-        check (kind in ('new_version', 'candidate', 'check_failed', 'confirmation_overdue')),
-    detail jsonb not null default '{}',
+        check (kind in ('candidate', 'check_failed', 'confirmation_overdue')),
+    reason text not null
+        check (reason in ('possible_successor', 'unreachable', 'parse_failed', 'load_failed', 'overdue')),
+    detail jsonb not null,
     raised_at timestamptz not null default now(),
     resolved_at timestamptz,          -- null = open
-    resolution text
+    resolution text check (resolution in ('promoted', 'rejected', 'fixed', 'confirmed')),
+    resolved_by text check (resolved_by in ('system', 'person')),
+    constraint flags_reason_matches_kind check ((kind, reason) in (
+        ('candidate', 'possible_successor'),
+        ('check_failed', 'unreachable'), ('check_failed', 'parse_failed'), ('check_failed', 'load_failed'),
+        ('confirmation_overdue', 'overdue'))),
+    constraint flags_resolved_together check (
+        (resolved_at is null) = (resolution is null) and (resolution is null) = (resolved_by is null)),
+    constraint flags_detail_shape check (
+        jsonb_typeof(detail) = 'object'
+        and (detail - 'file' - 'address' - 'message') = '{}'::jsonb
+        and (detail ? 'file') <> (detail ? 'address')
+        and (detail ? 'file') = (reason in ('parse_failed', 'load_failed')))
 );
+
+comment on column flags.detail is
+    'Which file or address the flag is about, and an optional message for the person: '
+    '{"file": "<path as listed in corpus.yaml>"} for parse_failed and load_failed, '
+    '{"address": "<url>"} for the other reasons; either may add "message": "<text>".';
 
 -- ---------------------------------------------------------------------------
 -- Versions: one version of a source
@@ -107,7 +127,7 @@ create table versions (
     source_key text not null references sources(key) on delete restrict,
     status text not null default 'pending'
         check (status in ('pending', 'current', 'retired')),
-    flag_id uuid references flags(id),
+    flag_id bigint references flags(id),
     title text not null,              -- title as printed on the version
     version_label text,               -- version statement as printed on the cover; null if none
     obtained_from text,               -- where this version was obtained; never changes once set
@@ -286,7 +306,8 @@ begin
         where source_key = v.source_key and status = 'current';
     update versions set status = 'current', became_current_at = now()
         where id = p_version_id;
-    update flags set resolved_at = now(), resolution = p_resolution where id = v.flag_id;
+    update flags set resolved_at = now(), resolution = 'promoted', resolved_by = 'system'
+        where id = v.flag_id;
 end $$;
 
 -- Retire a pending version that should not become current; delete its chunks; resolve the flag.
@@ -304,7 +325,8 @@ begin
     end if;
     delete from chunks where version_id = p_version_id;
     update versions set status = 'retired', retired_at = now() where id = p_version_id;
-    update flags set resolved_at = now(), resolution = p_resolution where id = v.flag_id;
+    update flags set resolved_at = now(), resolution = 'rejected', resolved_by = 'person'
+        where id = v.flag_id;
 end $$;
 
 -- Store an answer and the distinct versions its top-8 came from, in one transaction.

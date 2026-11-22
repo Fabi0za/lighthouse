@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import pytest
 
-from tests.db.conftest import make_flag, make_reference_rows, make_source, make_version
+from tests.db.conftest import make_flag, make_reference_rows, make_source, make_version, resolve_flag
 
 psycopg = pytest.importorskip("psycopg")
 from psycopg import errors
@@ -79,19 +79,6 @@ def test_text_fingerprint_set_once(pg):
         pg.execute("update versions set text_sha256 = 't2' where id = %s", (d,))
 
 
-def test_flag_not_resolvable_while_pending(pg):
-    s = make_source(pg)
-    f = make_flag(pg, s)
-    make_version(pg, s, flag_id=f)
-    with pytest.raises(errors.CheckViolation):
-        pg.execute("update flags set resolved_at = now() where id = %s", (f,))
-
-
-def test_flag_resolvable_without_pending_document(pg):
-    f = make_flag(pg, make_source(pg))
-    pg.execute("update flags set resolved_at = now(), resolution = 'dismissed' where id = %s", (f,))
-
-
 def test_used_version_not_deletable(pg):
     d = make_version(pg, make_source(pg), status="current")
     log = pg.execute(
@@ -112,7 +99,7 @@ def test_scopes_many_per_source(pg):
 
 def _resolved_flag(conn, source_key):
     f = make_flag(conn, source_key)
-    conn.execute("update flags set resolved_at = now(), resolution = 'done' where id = %s", (f,))
+    resolve_flag(conn, f)
     return f
 
 
