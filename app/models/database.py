@@ -75,8 +75,9 @@ class DatabaseClient:
         self,
         source_key: str,
         title: str,
+        version_label: str | None,
         obtained_from: str | None,
-        file_path: str | None,
+        page_limit: int | None,
         file_sha256: str,
         kind: str = "new_version",
     ) -> dict[str, Any]:
@@ -89,8 +90,9 @@ class DatabaseClient:
             "status": "pending",
             "flag_id": flag["id"],
             "title": title,
+            "version_label": version_label,
             "obtained_from": obtained_from,
-            "file_path": file_path,
+            "page_limit": page_limit,
             "file_sha256": file_sha256,
             "ingestion_status": "pending",
         }).execute().data[0]

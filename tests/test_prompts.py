@@ -40,3 +40,15 @@ def test_user_prompt_empty_context():
     prompt = build_user_prompt("Some question?", [])
     assert "Some question?" in prompt
     assert "no context" in prompt.lower() or "no relevant" in prompt.lower()
+
+
+def test_display_title():
+    from app.generation.prompts import display_title
+    assert display_title("T", "V1.3") == "T (V1.3)"
+    assert display_title("T", None) == "T"
+
+
+def test_user_prompt_shows_title_and_label():
+    chunk = {"content": "c", "section_title": "S", "page_number": 1, "level": "operator", "rank": 2,
+             "version_title": "T", "version_label": "V1.3"}
+    assert "[Source 1] T (V1.3) — S, Page 1" in build_user_prompt("q", [chunk])

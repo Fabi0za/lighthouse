@@ -3,6 +3,8 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from app.generation.prompts import display_title
+
 
 class ResponseFormatter:
     def format(
@@ -33,15 +35,16 @@ class ResponseFormatter:
         seen = set()
         sources = []
         for chunk in chunks:
+            title = display_title(chunk.get("version_title", "Unknown"), chunk.get("version_label"))
             key = (
-                chunk.get("version_title", ""),
+                title,
                 chunk.get("section_title", ""),
                 chunk.get("page_number", 0),
             )
             if key not in seen:
                 seen.add(key)
                 sources.append({
-                    "version_title": chunk.get("version_title", "Unknown"),
+                    "version_title": title,
                     "section": chunk.get("section_title", "Unknown"),
                     "page": chunk.get("page_number", 0),
                 })

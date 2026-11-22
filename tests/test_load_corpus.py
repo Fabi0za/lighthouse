@@ -42,8 +42,8 @@ sources:
     scopes: [x, y]
     watch_address: "https://example.org/op.pdf"
     versions:
-      - {path: v1.pdf, title: "Operator rules (V1)"}
-      - {path: v2.pdf, title: "Operator rules (V2)", max_pages: 4}
+      - {path: v1.pdf, title: "Operator rules", label: "V1"}
+      - {path: v2.pdf, title: "Operator rules", label: "V2", max_pages: 4}
 """
 
 
@@ -63,6 +63,8 @@ def test_load_corpus_reads_sources_and_versions(tmp_path):
     assert (national.watch_address, operator.watch_address) == (None, "https://example.org/op.pdf")
     assert (operator.key, operator.scopes) == ("op-rules", ["x", "y"])
     assert [v.path for v in operator.versions] == ["v1.pdf", "v2.pdf"]
+    assert [v.label for v in operator.versions] == ["V1", "V2"]
+    assert national.versions[0].label is None
     assert operator.versions[1].max_pages == 4
     assert operator.versions[0].obtained_from is None
 
@@ -150,9 +152,9 @@ async def test_load_all_saves_each_source_and_loads_versions_in_order(tmp_path, 
                                          "watch_address": "https://example.org/op.pdf"}]
     calls = []
 
-    async def fake_load(db_, source_key, file, title, obtained_from, *rest, max_pages=None, stored_path=None,
-                        parsed_cache=None):
-        calls.append((source_key, stored_path, max_pages))
+    async def fake_load(db_, source_key, file, title, obtained_from, *rest, version_label=None,
+                        max_pages=None, parsed_cache=None):
+        calls.append((source_key, file.name, version_label, max_pages))
         return "promoted", "d"
 
     counts = await lc.load_all(sources, tmp_path, db, None, None, None, load=fake_load)
@@ -160,8 +162,8 @@ async def test_load_all_saves_each_source_and_loads_versions_in_order(tmp_path, 
     assert [c.args for c in db.save_source.call_args_list] == [
         ("national-rules", "national", [], None),
         ("op-rules", "operator", ["x", "y"], "https://example.org/op.pdf")]
-    assert calls == [("national-rules", "a.pdf", None), ("op-rules", "v1.pdf", None),
-                     ("op-rules", "v2.pdf", 4)]
+    assert calls == [("national-rules", "a.pdf", None, None), ("op-rules", "v1.pdf", "V1", None),
+                     ("op-rules", "v2.pdf", "V2", 4)]
     assert counts == {"promoted": 3}
     out = capsys.readouterr().out
     assert "added source 'national-rules'" in out
@@ -175,10 +177,10 @@ async def test_load_all_stops_a_source_after_a_failure(tmp_path):
     db.find_source.return_value = None
     loaded = []
 
-    async def fake_load(db_, source_key, file, title, obtained_from, *rest, max_pages=None, stored_path=None,
-                        parsed_cache=None):
-        loaded.append(stored_path)
-        if stored_path == "v1.pdf":
+    async def fake_load(db_, source_key, file, title, obtained_from, *rest, version_label=None,
+                        max_pages=None, parsed_cache=None):
+        loaded.append(file.name)
+        if file.name == "v1.pdf":
             raise RuntimeError("boom")
         return "promoted", "d"
 

@@ -295,3 +295,22 @@ def test_sources_have_no_listing_address(pg):
         "select column_name from information_schema.columns where table_name = 'sources'")}
     assert "watch_address" in cols and not cols & {"address", "listing_address", "title", "issuer"}
 
+
+# --- version label and page limit --------------------------------------------
+
+def test_page_limit_positive(pg):
+    with pytest.raises(errors.CheckViolation):
+        make_version(pg, make_source(pg), page_limit=0)
+
+
+@pytest.mark.parametrize("column, value", [("version_label", "'V2'"), ("page_limit", "5")])
+def test_label_and_page_limit_immutable(pg, column, value):
+    d = make_version(pg, make_source(pg), version_label="V1", page_limit=4)
+    with pytest.raises(errors.CheckViolation):
+        pg.execute(f"update versions set {column} = {value} where id = %s", (d,))
+
+
+def test_versions_have_no_file_path(pg):
+    cols = {r[0] for r in pg.execute(
+        "select column_name from information_schema.columns where table_name = 'versions'")}
+    assert {"version_label", "page_limit", "obtained_from"} <= cols and "file_path" not in cols

@@ -174,7 +174,7 @@ def test_search_returns_source_fields_and_scopes(pg):
     rows = [dict(zip(cols, r)) for r in cur.fetchall()]
     for col in ("id", "version_id", "source_key", "content", "section_title", "page_number",
                 "chunk_index", "level", "rank", "scopes", "token_count",
-                "version_title"):
+                "version_title", "version_label"):
         assert col in cols, col
     by_source = {str(r["source_key"]): r for r in rows}
     assert sorted(by_source[a]["scopes"]) == ["bkw", "ekz"]

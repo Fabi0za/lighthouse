@@ -46,6 +46,7 @@ VERSION_FIELDS = ("path", "title")
 class CorpusVersion:
     path: str
     title: str
+    label: str | None
     obtained_from: str | None
     max_pages: int | None
 
@@ -110,7 +111,7 @@ def load_corpus(corpus_path: Path, repo_root: Path) -> list[CorpusSource]:
                 continue
             seen_paths.add(rv["path"])
             versions.append(CorpusVersion(
-                path=rv["path"], title=rv["title"],
+                path=rv["path"], title=rv["title"], label=rv.get("label") or None,
                 obtained_from=rv.get("obtained_from") or None, max_pages=max_pages,
             ))
 
@@ -174,7 +175,7 @@ async def load_all(sources, repo_root, db, parser, chunker, embedder, load=None,
             try:
                 action, doc_id = await load(
                     db, s.key, repo_root / v.path, v.title, v.obtained_from,
-                    parser, chunker, embedder, max_pages=v.max_pages, stored_path=v.path,
+                    parser, chunker, embedder, version_label=v.label, max_pages=v.max_pages,
                     parsed_cache=parsed_cache,
                 )
             except Exception as e:  # noqa: BLE001 - report, then skip this source's later versions

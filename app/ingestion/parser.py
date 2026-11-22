@@ -108,7 +108,7 @@ class ReductoParser:
             timeout=300.0,
         )
 
-    async def parse_pdf(self, file_path: str) -> tuple[dict[str, Any], list[dict]]:
+    async def parse_pdf(self, path: str) -> tuple[dict[str, Any], list[dict]]:
         """Parse a PDF file via Reducto API (upload then parse).
 
         Returns:
@@ -116,10 +116,10 @@ class ReductoParser:
             {"title": str, "content": str, "page": int} dicts.
         """
         # Step 1: Upload the file
-        with open(file_path, "rb") as f:
+        with open(path, "rb") as f:
             upload_response = await self.client.post(
                 "/upload",
-                files={"file": (file_path.split("/")[-1], f, "application/pdf")},
+                files={"file": (path.split("/")[-1], f, "application/pdf")},
             )
         upload_response.raise_for_status()
         file_id = upload_response.json()["file_id"]

@@ -18,6 +18,8 @@ Each entry: what changed and why, then the evidence. Measurements live in [basel
   Evidence: database tests for key format, immutable key, `save_source` replacing scopes and level, and the deferred scope rule on insert and on removing the last scope; 190 tests pass with the database tests.
 - **A source's watch address is set by a person (`corpus.yaml`), and adding the source or changing that address stamps `confirmed_at`; a version's `obtained_from` cannot change; promotion no longer moves the source's address.** The address moved silently on every promotion and the confirmation date was never written.
   Evidence: database tests: a new source is confirmed, the same address keeps the date across transactions, a new address gives a later date, `obtained_from` cannot be changed, promotion leaves the source untouched; 195 tests pass with the database tests.
+- **Versions record the title and version label as printed and the page limit they were loaded with; the prompt, citations and chunk header show title and label; `file_path` is gone.** The label was hand-written into the title, the page limit lived only in `corpus.yaml`, and the baseline script found versions by local path.
+  Evidence: database tests for a positive page limit, immutable label and page limit, no `file_path` column, `match_chunks` returning the label; prompt, formatter and loader tests; 203 tests pass with the database tests.
 
 ## 2026-11-21
 

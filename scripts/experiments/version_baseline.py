@@ -30,7 +30,7 @@ import time
 from app.config import get_settings
 from app.generation.formatter import ResponseFormatter
 from app.generation.llm import LLMClient
-from app.generation.prompts import build_system_prompt, build_user_prompt
+from app.generation.prompts import build_system_prompt, build_user_prompt, display_title
 from app.ingestion.chunker import Chunker
 from app.ingestion.embedder import Embedder
 from app.ingestion.parser import ReductoParser
@@ -44,8 +44,9 @@ QUESTIONS = {
     "Q1": "Was muss bei Neuinstallationen im Netz der BKW für Steuerlösungen vorbereitet werden?",
     "Q2": "Muss bei Neuinstallationen im Netz der BKW ein Steuerdraht 2 für den Doppeltarif vorgesehen werden?",
 }
-V12_PATH = "data/BKW/DE_Vorgaben_BKW_V1.2.pdf"
-V13_PATH = "data/BKW/20250521_DE_Vorgaben_BKW_V1.3.pdf"
+SOURCE_KEY = "bkw-vorgaben-niederspannung"
+V12_LABEL = "Version: V1.2, Gültigkeit 1. März 2025"  # as in corpus.yaml
+V13_LABEL = "Version: V1.3, Gültig ab 21.05.2025"
 
 
 def cosine(a: list[float], b: list[float]) -> float:
@@ -65,11 +66,18 @@ def scratch_chunks(chunks, embeddings, query_embedding, version: dict, source_fi
             "chunk_index": c.chunk_index,
             "token_count": c.token_count,
             "version_title": version["title"],
+            "version_label": version["version_label"],
             "similarity": cosine(e, query_embedding),
             **source_fields,
         }
         for c, e in zip(chunks, embeddings)
     ]
+
+
+def pick_versions(versions: list[dict], v12_label: str, v13_label: str) -> tuple[dict, dict]:
+    """The V1.2 and V1.3 rows of the BKW Vorgaben source, found by their printed labels."""
+    by_label = {v["version_label"]: v for v in versions if v["source_key"] == SOURCE_KEY}
+    return by_label[v12_label], by_label[v13_label]
 
 
 def stale_candidates(live: list[dict], scratch: list[dict], drop_version_id: str, k: int) -> list[dict]:
@@ -87,8 +95,7 @@ async def main():
 
     s = get_settings()
     db = DatabaseClient()
-    docs = {d["file_path"]: d for d in db.list_versions()}
-    v12, v13 = docs[V12_PATH], docs[V13_PATH]
+    v12, v13 = pick_versions(db.list_versions(SOURCE_KEY), V12_LABEL, V13_LABEL)
     label = {v12["id"]: "V1.2", v13["id"]: "V1.3"}
 
     embedder = Embedder(s.cohere_api_key, s.embedding_model, s.embedding_dimensions)
@@ -107,7 +114,7 @@ async def main():
         sections = parser._extract_sections(v12["parsed_output"])
         await parser.close()
         chunks = Chunker(chunk_size=s.chunk_size, chunk_overlap=s.chunk_overlap).chunk_sections(
-            sections, doc_title=v12["title"])
+            sections, doc_title=display_title(v12["title"], v12["version_label"]))
         embeddings = await embedder.embed_texts([c.content for c in chunks])
         source = db.client.table("sources").select("*").eq("key", v12["source_key"]).execute().data[0]
         source_rank = db.client.table("levels").select("rank").eq("key", source["level"]) \

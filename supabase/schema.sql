@@ -108,9 +108,10 @@ create table versions (
     status text not null default 'pending'
         check (status in ('pending', 'current', 'retired')),
     flag_id uuid references flags(id),
-    title text not null,              -- as shown to the model, with version label
+    title text not null,              -- title as printed on the version
+    version_label text,               -- version statement as printed on the cover; null if none
     obtained_from text,               -- where this version was obtained; never changes once set
-    file_path text,
+    page_limit integer check (page_limit > 0),  -- only the first N pages were loaded; null = all
     file_sha256 text not null,        -- hash of the file bytes
     text_sha256 text,                 -- hash of normalised parsed text; decides "new version"
     parsed_output jsonb,              -- retained record of the version's content
@@ -139,6 +140,11 @@ begin
     end if;
     if old.obtained_from is not null and new.obtained_from is distinct from old.obtained_from then
         raise exception 'obtained_from of version % cannot change', old.id
+            using errcode = '23514';
+    end if;
+    if new.version_label is distinct from old.version_label
+       or new.page_limit is distinct from old.page_limit then
+        raise exception 'label and page limit of version % cannot change', old.id
             using errcode = '23514';
     end if;
     return new;
@@ -365,7 +371,8 @@ returns table (
     scopes text[],
     token_count integer,
     similarity float,
-    version_title text
+    version_title text,
+    version_label text
 )
 language sql stable
 as $$
@@ -383,7 +390,8 @@ as $$
                   from source_scopes ss where ss.source_key = s.key), '{}'),
         c.token_count,
         1 - (c.embedding <=> query_embedding),
-        v.title
+        v.title,
+        v.version_label
     from chunks c
     join versions v on v.id = c.version_id and v.status = 'current'
     join sources s on s.key = v.source_key

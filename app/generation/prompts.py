@@ -14,6 +14,11 @@ Rules:
 7. End your response with a confidence assessment: high, medium, or low."""
 
 
+def display_title(title: str, version_label: str | None) -> str:
+    """A version's title as shown to the model and in citations: title and printed label."""
+    return f"{title} ({version_label})" if version_label else title
+
+
 def build_system_prompt() -> str:
     return SYSTEM_PROMPT
 
@@ -26,7 +31,7 @@ No relevant context documents were found. State that you have no relevant contex
 
     context_parts = []
     for i, chunk in enumerate(chunks, 1):
-        title = chunk.get("version_title", "Unknown Document")
+        title = display_title(chunk.get("version_title", "Unknown Document"), chunk.get("version_label"))
         section = chunk.get("section_title", "Unknown Section")
         page = chunk.get("page_number", "?")
         priority = chunk.get("rank", 0)

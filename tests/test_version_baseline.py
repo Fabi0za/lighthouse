@@ -48,15 +48,26 @@ def test_scratch_chunks_carry_version_and_source_fields():
             self.content, self.section_title, self.page_number = f"text {i}", "S", 1
             self.chunk_index, self.token_count = i, 3
 
-    version = {"id": "v12", "title": "Doc (V1.2)"}
+    version = {"id": "v12", "title": "Doc", "version_label": "V1.2"}
     source_fields = {"source_key": "s", "level": "operator", "rank": 2, "scopes": ["bkw"]}
     out = vb.scratch_chunks([Chunk(0), Chunk(1)], [[1.0, 0.0], [0.0, 1.0]], [1.0, 0.0], version, source_fields)
     assert [c["similarity"] for c in out] == pytest.approx([1.0, 0.0])
     assert out[0]["version_id"] == "v12"
-    assert out[0]["version_title"] == "Doc (V1.2)"
+    assert (out[0]["version_title"], out[0]["version_label"]) == ("Doc", "V1.2")
     assert out[0]["scopes"] == ["bkw"]
     assert out[0]["id"] == "scratch-v12-0"
 
 
 def test_modes():
     assert set(vb.MODES) == {"current", "stale"}
+
+
+def test_pick_versions_finds_the_pair_by_label():
+    rows = [
+        {"id": "a", "source_key": vb.SOURCE_KEY, "version_label": "V1.2"},
+        {"id": "b", "source_key": "bkw-vorgaben-niederspannung", "version_label": "V1.3"},
+        {"id": "c", "source_key": "other", "version_label": "V1.2"},
+    ]
+    v12, v13 = vb.pick_versions(rows, "V1.2", "V1.3")
+    assert vb.SOURCE_KEY == "bkw-vorgaben-niederspannung"
+    assert (v12["id"], v13["id"]) == ("a", "b")

@@ -11,6 +11,7 @@ from typing import Any
 
 from pypdf import PdfReader, PdfWriter
 
+from app.generation.prompts import display_title
 from app.ingestion.fingerprint import file_sha256, text_sha256
 
 
@@ -43,8 +44,9 @@ async def load_version(
     parser,
     chunker,
     embedder,
+    *,
+    version_label: str | None = None,
     max_pages: int | None = None,
-    stored_path: str | None = None,
     parsed_cache: Path | None = None,
 ) -> tuple[str, str]:
     """Load file as a version of the source with source_key. Returns (action, version_id).
@@ -56,6 +58,7 @@ async def load_version(
     With parsed_cache, a file <file_sha256>.json in that directory is used as the
     parser's output instead of parsing (max_pages is then ignored: the cached output
     is whatever was parsed before). Without it, the file is always parsed.
+    max_pages is recorded on the version as its page limit.
     """
     file = Path(file)
     file_hash = file_sha256(file)
@@ -68,7 +71,7 @@ async def load_version(
             db.delete_pending_version(v["id"], "dismissed (reload)")
     versions = [v for v in versions if v.get("file_sha256") != file_hash]
 
-    doc = db.hold_version(source_key, title, obtained_from, stored_path or str(file), file_hash)
+    doc = db.hold_version(source_key, title, version_label, obtained_from, max_pages, file_hash)
     doc_id = doc["id"]
     try:
         db.update_version(doc_id, {"ingestion_status": "processing"})
@@ -93,7 +96,7 @@ async def load_version(
             return "dismissed", v["id"]
         db.set_text_fingerprint(doc_id, text_hash, raw_output)
 
-        chunks = chunker.chunk_sections(sections, doc_title=title)
+        chunks = chunker.chunk_sections(sections, doc_title=display_title(title, version_label))
         if not chunks:
             raise RuntimeError("parser returned no content")
         embeddings = await embedder.embed_texts([c.content for c in chunks])

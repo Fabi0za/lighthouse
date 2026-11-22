@@ -43,12 +43,13 @@ class PgDb:
     def get_version(self, doc_id):
         return self.c.execute("select * from versions where id = %s", (doc_id,)).fetchone()
 
-    def hold_version(self, source_key, title, obtained_from, file_path, file_sha256, kind="new_version"):
+    def hold_version(self, source_key, title, version_label, obtained_from, page_limit, file_sha256,
+                     kind="new_version"):
         flag = self._one("insert into flags (source_key, kind) values (%s, %s) returning id", (source_key, kind))
         return self._one(
-            "insert into versions (source_key, status, flag_id, title, obtained_from, file_path, file_sha256) "
-            "values (%s, 'pending', %s, %s, %s, %s, %s) returning *",
-            (source_key, flag["id"], title, obtained_from, file_path, file_sha256))
+            "insert into versions (source_key, status, flag_id, title, version_label, obtained_from, "
+            "page_limit, file_sha256) values (%s, 'pending', %s, %s, %s, %s, %s, %s) returning *",
+            (source_key, flag["id"], title, version_label, obtained_from, page_limit, file_sha256))
 
     def update_version(self, doc_id, updates):
         (k, v), = updates.items()

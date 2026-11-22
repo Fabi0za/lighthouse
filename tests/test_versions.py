@@ -46,12 +46,12 @@ async def test_new_file_promoted(tmp_path):
     f = _pdf(tmp_path / "v2.pdf")
     db, parser, chunker, embedder = _deps()
 
-    action, doc_id = await load_version(db, SOURCE, f, "Doc (V2)", "https://example.org/v2.pdf",
-                                        parser, chunker, embedder)
+    action, doc_id = await load_version(db, SOURCE, f, "Doc", "https://example.org/v2.pdf",
+                                        parser, chunker, embedder, version_label="V2")
 
     assert (action, doc_id) == ("promoted", "new-doc")
     db.hold_version.assert_called_once_with(
-        "src-1", "Doc (V2)", "https://example.org/v2.pdf", str(f), file_sha256(f)
+        "src-1", "Doc", "V2", "https://example.org/v2.pdf", None, file_sha256(f)
     )
     db.set_text_fingerprint.assert_called_once_with("new-doc", text_sha256(SECTIONS), {"result": {"raw": True}})
     assert chunker.chunk_sections.call_args.kwargs["doc_title"] == "Doc (V2)"
@@ -139,16 +139,8 @@ async def test_max_pages_limits_parse_but_not_fingerprint(tmp_path):
     await load_version(db, SOURCE, f, "Doc", None, parser, chunker, embedder, max_pages=4)
 
     assert pages_seen == [4]
-    assert db.hold_version.call_args.args[4] == file_sha256(f)
-
-
-async def test_stored_path_overrides_file_path(tmp_path):
-    f = _pdf(tmp_path / "v2.pdf")
-    db, parser, chunker, embedder = _deps()
-
-    await load_version(db, SOURCE, f, "Doc", None, parser, chunker, embedder, stored_path="data/v2.pdf")
-
-    assert db.hold_version.call_args.args[3] == "data/v2.pdf"
+    assert db.hold_version.call_args.args[4] == 4  # page_limit recorded on the version
+    assert db.hold_version.call_args.args[5] == file_sha256(f)
 
 
 async def test_empty_parse_fails(tmp_path):
@@ -229,3 +221,10 @@ async def test_pending_row_with_same_text_but_other_bytes_is_dismissed_not_stuck
     assert (action, doc_id) == ("promoted", "new-doc")
     db.delete_pending_version.assert_called_once_with("stale", "dismissed (reload)")
     db.set_text_fingerprint.assert_called_once()
+
+
+async def test_chunk_header_uses_display_title_without_label(tmp_path):
+    f = _pdf(tmp_path / "v.pdf")
+    db, parser, chunker, embedder = _deps()
+    await load_version(db, SOURCE, f, "Merkblatt", None, parser, chunker, embedder)
+    assert chunker.chunk_sections.call_args.kwargs["doc_title"] == "Merkblatt"

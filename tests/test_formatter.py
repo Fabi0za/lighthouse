@@ -31,3 +31,9 @@ def test_format_response_refusal():
     result = formatter.format(raw_response, [])
     assert "don't have enough information" in result["answer"]
     assert result["confidence"] == "low"
+
+
+def test_sources_show_title_and_label():
+    chunks = [{"version_title": "T", "version_label": "V1.3", "section_title": "S", "page_number": 1}]
+    sources = ResponseFormatter().format("Antwort", chunks)["sources"]
+    assert sources == [{"version_title": "T (V1.3)", "section": "S", "page": 1}]

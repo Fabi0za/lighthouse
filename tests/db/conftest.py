@@ -115,13 +115,15 @@ def make_version(
     ingestion_status: str = "completed",
     retired_at: str | None = None,
     obtained_from: str | None = None,
+    version_label: str | None = None,
+    page_limit: int | None = None,
 ) -> str:
     if status == "pending" and flag_id is None:
         flag_id = make_flag(conn, source_key)
     return str(conn.execute(
-        "insert into versions (source_key, status, flag_id, title, obtained_from, file_sha256, "
-        "text_sha256, ingestion_status, retired_at) "
-        "values (%s, %s, %s, 'Doc', %s, %s, %s, %s, %s) returning id",
-        (source_key, status, flag_id, obtained_from, file_sha256 or uuid.uuid4().hex,
-         text_sha256, ingestion_status, retired_at),
+        "insert into versions (source_key, status, flag_id, title, version_label, obtained_from, "
+        "page_limit, file_sha256, text_sha256, ingestion_status, retired_at) "
+        "values (%s, %s, %s, 'Doc', %s, %s, %s, %s, %s, %s, %s) returning id",
+        (source_key, status, flag_id, version_label, obtained_from, page_limit,
+         file_sha256 or uuid.uuid4().hex, text_sha256, ingestion_status, retired_at),
     ).fetchone()[0])

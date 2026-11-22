@@ -36,7 +36,7 @@ def test_no_old_project_words():
 OLD_STORE_NAMES = re.compile(
     r"""\b(from|into|update|join|references|on|table)\s+documents\b|table\(["']documents["']\)"""
     r"|document_chunks|query_log|document_id|document_title|\blog_id\b"
-    r"|keyword_search|content_tsv|QueryLogger"
+    r"|keyword_search|content_tsv|QueryLogger|file_path|stored_path"
 )
 
 

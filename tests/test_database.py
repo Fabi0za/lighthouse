@@ -52,7 +52,7 @@ def test_hold_version_inserts_flag_before_pending_document(db, mock_supabase):
     ]
     source_key = "bkw-vorgaben"
 
-    doc = db.hold_version(source_key, "Doc V2", "https://example.org/v2.pdf", "data/v2.pdf", "abc")
+    doc = db.hold_version(source_key, "Doc", "V2", "https://example.org/v2.pdf", 4, "abc")
 
     tables = [c.args[0] for c in mock_supabase.table.call_args_list]
     assert tables == ["flags", "versions"]
@@ -63,12 +63,15 @@ def test_hold_version_inserts_flag_before_pending_document(db, mock_supabase):
     assert doc_row["status"] == "pending"
     assert doc_row["source_key"] == source_key
     assert doc_row["file_sha256"] == "abc"
+    assert (doc_row["title"], doc_row["version_label"], doc_row["page_limit"]) == ("Doc", "V2", 4)
+    assert doc_row["obtained_from"] == "https://example.org/v2.pdf"
+    assert "file_path" not in doc_row
     assert doc["id"] == doc_id
 
 
 def test_hold_version_passes_kind(db, mock_supabase):
     mock_supabase.execute.side_effect = [MagicMock(data=[{"id": "f"}]), MagicMock(data=[{"id": "d"}])]
-    db.hold_version("s", "T", None, None, "abc", kind="candidate")
+    db.hold_version("s", "T", None, None, None, "abc", kind="candidate")
     assert mock_supabase.insert.call_args_list[0].args[0]["kind"] == "candidate"
 
 
@@ -158,7 +161,7 @@ def test_list_source_keys(db, mock_supabase):
 
 def test_hold_version_writes_source_key(db, mock_supabase):
     mock_supabase.execute.side_effect = [MagicMock(data=[{"id": "f"}]), MagicMock(data=[{"id": "v"}])]
-    db.hold_version("s", "T", None, None, "h")
+    db.hold_version("s", "T", None, None, None, "h")
     assert mock_supabase.insert.call_args_list[0].args[0]["source_key"] == "s"
     assert mock_supabase.insert.call_args_list[1].args[0]["source_key"] == "s"
 
