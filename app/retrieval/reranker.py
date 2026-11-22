@@ -9,7 +9,7 @@ import cohere
 class CohereReranker:
     """Neural reranker using Cohere's rerank API."""
 
-    def __init__(self, api_key: str, top_n: int = 8, model: str = "rerank-v3.5"):
+    def __init__(self, api_key: str, top_n: int, model: str):
         self.client = cohere.Client(api_key=api_key)
         self.top_n = top_n
         self.model = model

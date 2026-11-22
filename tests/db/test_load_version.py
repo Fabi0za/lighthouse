@@ -14,7 +14,7 @@ from pypdf import PdfWriter
 
 from app.ingestion.chunker import Chunk
 from app.ingestion.versions import load_version as _load_version
-from tests.db.conftest import make_reference_rows
+from tests.db.conftest import answer_json, make_reference_rows
 
 psycopg = pytest.importorskip("psycopg")
 from psycopg.rows import dict_row
@@ -183,8 +183,7 @@ async def test_crash_while_loading_is_resumed(db, source, tmp_path):
 
 async def test_second_version_reports_answers_that_saw_the_first(db, source, tmp_path):
     _, v1, _ = await load_version(db, source, _pdf(tmp_path / "a.pdf", 200), "Doc", None, *_deps())
-    db.c.execute("select log_answer(%s::jsonb, %s::uuid[])", (json.dumps(
-        {"question": "q", "llm_prompt": "p", "llm_response": "r", "model_used": "m", "latency_ms": 1}), [v1]))
+    db.c.execute("select log_answer(%s::jsonb, %s::uuid[])", (answer_json(), [v1]))
     db.c.commit()
     parser, chunker, embedder = _deps()
     parser.parse_pdf = AsyncMock(return_value=({"result": {}}, [{"title": "S", "content": "neu", "page": 1}]))

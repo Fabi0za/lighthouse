@@ -5,7 +5,7 @@ import json
 
 import pytest
 
-from tests.db.conftest import make_flag, make_source, make_version
+from tests.db.conftest import answer_json, make_flag, make_source, make_version
 from tests.db.test_functions import add_chunk, chunk_count, doc, promote
 
 psycopg = pytest.importorskip("psycopg")
@@ -126,8 +126,7 @@ def test_promote_retires_previous_and_counts_its_answers(pg):
     add_chunk(pg, v1)
     promote(pg, v1)
     for _ in range(2):
-        pg.execute("select log_answer(%s::jsonb, %s::uuid[])", (json.dumps(
-            {"question": "q", "llm_prompt": "p", "llm_response": "r", "model_used": "m", "latency_ms": 1}), [v1]))
+        pg.execute("select log_answer(%s::jsonb, %s::uuid[])", (answer_json(), [v1]))
     v2 = make_version(pg, s, text_sha256="t2")
     add_chunk(pg, v2)
     assert promote(pg, v2) == 2

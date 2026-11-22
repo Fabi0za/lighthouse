@@ -46,6 +46,9 @@ class DatabaseClient:
     def save_indexing_settings(self, row: dict[str, Any]) -> None:
         self.client.table("indexing_settings").upsert(row, on_conflict="key").execute()
 
+    def save_answer_settings(self, row: dict[str, Any]) -> None:
+        self.client.table("answer_settings").upsert(row, on_conflict="key").execute()
+
     def current_indexing_settings_keys(self) -> list[str]:
         """The indexing settings that current versions were loaded with (one, unless empty)."""
         rows = (
@@ -185,6 +188,14 @@ class DatabaseClient:
     def get_answer(self, answer_id: uuid.UUID) -> dict[str, Any] | None:
         result = self.client.table("answers").select("*").eq("id", str(answer_id)).execute()
         return result.data[0] if result.data else None
+
+    def versions_seen(self, answer_id: str) -> list[dict[str, Any]]:
+        """Source key, label and status of each version the answer saw."""
+        rows = (
+            self.client.table("answer_versions").select("versions(source_key, version_label, status)")
+            .eq("answer_id", str(answer_id)).execute().data
+        )
+        return [row["versions"] for row in rows]
 
     def answers_that_saw(self, version_id: str) -> list[dict[str, Any]]:
         """Answers that saw the version, newest first, each with the other versions it saw."""

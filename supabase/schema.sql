@@ -284,6 +284,19 @@ create index chunks_embedding_idx
 -- ---------------------------------------------------------------------------
 -- Answers and the versions they saw
 -- ---------------------------------------------------------------------------
+-- What an answer depends on besides the indexed text: retrieval and rerank depth, the
+-- rerank and answer models, and the prompt version. Rows are made from the app's
+-- configuration; the key names the values.
+create table answer_settings (
+    key text primary key check (key ~ '^[a-z0-9.]+(-[a-z0-9.]+)*$'),
+    retrieval_top_k integer not null check (retrieval_top_k > 0),
+    rerank_top_n integer not null check (rerank_top_n > 0 and rerank_top_n <= retrieval_top_k),
+    rerank_model text not null,
+    answer_model text not null,
+    prompt_version integer not null check (prompt_version > 0),  -- raised when the prompt changes
+    unique (retrieval_top_k, rerank_top_n, rerank_model, answer_model, prompt_version)
+);
+
 create table answers (
     id uuid primary key default gen_random_uuid(),
     question text not null,
@@ -292,8 +305,8 @@ create table answers (
     reranked_chunks jsonb not null default '[]',   -- chunk text the model saw
     llm_prompt text not null,
     llm_response text not null,
-    formatted_answer jsonb not null default '{}',
-    model_used text not null,
+    indexing_settings_key text not null references indexing_settings(key),
+    answer_settings_key text not null references answer_settings(key),
     latency_ms integer not null,
     created_at timestamptz not null default now()
 );
@@ -573,15 +586,15 @@ declare
     v_id uuid;
 begin
     insert into answers (question, detected_scope, retrieved_chunks, reranked_chunks,
-                            llm_prompt, llm_response, formatted_answer, model_used, latency_ms)
+                         llm_prompt, llm_response, indexing_settings_key, answer_settings_key, latency_ms)
     values (p_answer->>'question',
             p_answer->>'detected_scope',
             coalesce(p_answer->'retrieved_chunks', '[]'),
             coalesce(p_answer->'reranked_chunks', '[]'),
             p_answer->>'llm_prompt',
             p_answer->>'llm_response',
-            coalesce(p_answer->'formatted_answer', '{}'),
-            p_answer->>'model_used',
+            p_answer->>'indexing_settings_key',
+            p_answer->>'answer_settings_key',
             (p_answer->>'latency_ms')::integer)
     returning id into v_id;
 
@@ -695,6 +708,7 @@ grant execute on all functions in schema public to service_role;
 alter table levels enable row level security;
 alter table scopes enable row level security;
 alter table indexing_settings enable row level security;
+alter table answer_settings enable row level security;
 alter table sources enable row level security;
 alter table source_scopes enable row level security;
 alter table flags enable row level security;

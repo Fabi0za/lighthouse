@@ -6,6 +6,7 @@ from typing import Any
 from fastapi import FastAPI, HTTPException
 
 from app.config import Settings
+from app.generation.formatter import ResponseFormatter
 from app.models.database import DatabaseClient
 from app.models.schemas import EvalRunRequest, QueryRequest
 from app.pipeline import QueryPipeline
@@ -31,8 +32,9 @@ def create_app(
             raise HTTPException(status_code=503, detail="Database not initialized")
         result = db.get_answer(answer_id)
         if result is None:
-            raise HTTPException(status_code=404, detail="Query log not found")
-        return result
+            raise HTTPException(status_code=404, detail="Answer not found")
+        formatted = ResponseFormatter().format(result["llm_response"], result["reranked_chunks"])
+        return {**result, "formatted": formatted, "versions": db.versions_seen(answer_id)}
 
     @app.get("/versions")
     def list_versions() -> list[dict[str, Any]]:

@@ -12,11 +12,13 @@ from pathlib import Path
 
 import pytest
 
+from app.generation import prompts
 from app.ingestion import chunker
 
 ROOT = Path(__file__).resolve().parent.parent
 
 RECORDED = {
+    "app/generation/prompts.py": ("PROMPT_VERSION", 1, "f444ac07297325c9b8d83f2cfe1f90898d46a61c024ef44ecf8d8b8eeb2a0e7f"),
     "app/ingestion/chunker.py": ("CHUNKER_VERSION", 1, "552ef27c36e7584f83868573a7a2a093e86cedcdce99ea919b5da152a5d79a8d"),
 }
 
@@ -50,3 +52,7 @@ def test_guard_names_both_choices_when_the_file_changed(monkeypatch):
 def test_guard_fails_when_the_version_was_raised_without_recording(monkeypatch):
     with pytest.raises(AssertionError, match="was recorded for 1"):
         _check("app/ingestion/chunker.py", "CHUNKER_VERSION", 2)
+
+
+def test_prompt_version_matches_its_source():
+    _check("app/generation/prompts.py", "PROMPT_VERSION", prompts.PROMPT_VERSION)

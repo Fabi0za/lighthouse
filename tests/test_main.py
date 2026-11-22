@@ -26,8 +26,12 @@ def mock_db():
     ]
     db.get_answer.return_value = {
         "id": str(uuid.uuid4()), "question": "test?", "detected_scope": None,
-        "retrieved_chunks": [], "reranked_chunks": [], "llm_prompt": "p",
-        "llm_response": "r", "formatted_answer": {}, "model_used": "test",
+        "retrieved_chunks": [],
+        "reranked_chunks": [{"version_title": "T", "version_label": "V1.3", "section_title": "S",
+                             "page_number": 2}],
+        "llm_prompt": "p",
+        "llm_response": "Antwort.\n\nConfidence: high",
+        "indexing_settings_key": "ik", "answer_settings_key": "ak",
         "latency_ms": 100,
     }
     return db
@@ -80,3 +84,12 @@ def test_documents_are_read_only(client):
 def test_old_paths_are_gone(client):
     assert client.get("/documents").status_code == 404
     assert client.get(f"/query/{uuid.uuid4()}").status_code == 404
+
+
+def test_get_answer_derives_formatted_and_lists_versions(client, mock_db):
+    mock_db.versions_seen.return_value = [
+        {"source_key": "bkw-vorgaben-niederspannung", "version_label": "V1.3", "status": "current"}]
+    data = client.get(f"/answers/{uuid.uuid4()}").json()
+    assert data["formatted"] == {"answer": "Antwort.", "confidence": "high",
+                                 "sources": [{"version_title": "T (V1.3)", "section": "S", "page": 2}]}
+    assert data["versions"] == mock_db.versions_seen.return_value

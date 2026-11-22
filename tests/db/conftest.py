@@ -6,6 +6,7 @@ Each session creates a fresh database, applies supabase/schema.sql unchanged, an
 """
 from __future__ import annotations
 
+import json
 import os
 import uuid
 from pathlib import Path
@@ -77,7 +78,7 @@ def pg_db_url():
 
 def make_reference_rows(conn) -> None:
     """Levels national (rank 1) and operator (rank 2, needs a scope); scopes bkw, ekz;
-    indexing settings test-a and test-b."""
+    indexing settings test-a and test-b; answer settings test-answers."""
     conn.execute(
         "insert into levels (key, rank, requires_scope) values "
         "('national', 1, false), ('operator', 2, true) on conflict do nothing"
@@ -91,6 +92,17 @@ def make_reference_rows(conn) -> None:
         "chunker_version) values ('test-a', 'm', 1536, 500, 50, 1), ('test-b', 'm', 1536, 400, 50, 1) "
         "on conflict do nothing"
     )
+    conn.execute(
+        "insert into answer_settings (key, retrieval_top_k, rerank_top_n, rerank_model, answer_model, "
+        "prompt_version) values ('test-answers', 40, 8, 'r', 'a', 1) on conflict do nothing"
+    )
+
+
+def answer_json(**over) -> str:
+    """An answer as log_answer takes it, under the test settings."""
+    answer = {"question": "q", "llm_prompt": "p", "llm_response": "r", "latency_ms": 1,
+              "indexing_settings_key": "test-a", "answer_settings_key": "test-answers"}
+    return json.dumps({**answer, **over})
 
 
 def make_source(conn, key: str = "source", watch_address: str | None = None,

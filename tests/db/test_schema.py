@@ -3,13 +3,13 @@ from __future__ import annotations
 
 import pytest
 
-from tests.db.conftest import make_flag, make_reference_rows, make_source, make_version, resolve_flag
+from tests.db.conftest import answer_json, make_flag, make_reference_rows, make_source, make_version, resolve_flag
 
 psycopg = pytest.importorskip("psycopg")
 from psycopg import errors
 
 TABLES = {
-    "levels", "scopes", "indexing_settings", "sources", "source_scopes", "versions", "chunks", "flags",
+    "levels", "scopes", "indexing_settings", "answer_settings", "sources", "source_scopes", "versions", "chunks", "flags",
     "answers", "answer_versions", "eval_questions", "eval_runs",
 }
 
@@ -65,11 +65,7 @@ def test_text_fingerprint_set_once(pg):
 
 def test_used_version_not_deletable(pg):
     d = make_version(pg, make_source(pg), status="current")
-    log = pg.execute(
-        "insert into answers (question, llm_prompt, llm_response, model_used, latency_ms) "
-        "values ('q', 'p', 'r', 'm', 1) returning id"
-    ).fetchone()[0]
-    pg.execute("insert into answer_versions (answer_id, version_id) values (%s, %s)", (log, d))
+    pg.execute("select log_answer(%s::jsonb, %s::uuid[])", (answer_json(), [d]))
     with pytest.raises(errors.RestrictViolation):
         pg.execute("delete from versions where id = %s", (d,))
 

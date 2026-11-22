@@ -18,9 +18,9 @@ class AnswerLogger:
         reranked_chunks: list[dict[str, Any]],
         llm_prompt: str,
         llm_response: str,
-        formatted_answer: dict[str, Any],
-        model_used: str,
         latency_ms: int,
+        indexing_settings_key: str,
+        answer_settings_key: str,
         version_ids: list[str],
     ) -> uuid.UUID:
         """Store the answer and the versions its top chunks came from, in one transaction."""
@@ -31,8 +31,8 @@ class AnswerLogger:
             "reranked_chunks": reranked_chunks,
             "llm_prompt": llm_prompt,
             "llm_response": llm_response,
-            "formatted_answer": formatted_answer,
-            "model_used": model_used,
             "latency_ms": latency_ms,
+            "indexing_settings_key": indexing_settings_key,
+            "answer_settings_key": answer_settings_key,
         }
         return uuid.UUID(str(self.db.log_answer(log_data, version_ids)))

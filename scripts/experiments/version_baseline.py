@@ -38,6 +38,7 @@ from app.answers.logger import AnswerLogger
 from app.models.database import DatabaseClient
 from app.retrieval.query_parser import QueryParser
 from app.retrieval.reranker import CohereReranker
+from app.settings_rows import answer_settings_row, indexing_settings_row
 
 MODES = ("current", "stale")
 QUESTIONS = {
@@ -100,7 +101,10 @@ async def main():
     embedder = Embedder(s.cohere_api_key, s.embedding_model, s.embedding_dimensions)
     llm = LLMClient(api_key=s.anthropic_api_key, model=s.llm_model)
     query_parser = QueryParser(known_scopes=db.get_known_scopes())
-    reranker = CohereReranker(api_key=s.cohere_api_key, top_n=s.rerank_top_n)
+    reranker = CohereReranker(api_key=s.cohere_api_key, top_n=s.rerank_top_n, model=s.rerank_model)
+    indexing_settings, answer_settings = indexing_settings_row(s), answer_settings_row(s)
+    db.save_indexing_settings(indexing_settings)
+    db.save_answer_settings(answer_settings)
     formatter = ResponseFormatter()
     logger = AnswerLogger(db=db)
 
@@ -160,8 +164,9 @@ async def main():
                     answer_id = logger.log(
                         question=question, detected_scope=parsed.detected_scope,
                         retrieved_chunks=retrieved, reranked_chunks=reranked, llm_prompt=user_prompt,
-                        llm_response=answer, formatted_answer=formatted, model_used=llm.model,
-                        latency_ms=int((time.monotonic() - start) * 1000), version_ids=version_ids,
+                        llm_response=answer, latency_ms=int((time.monotonic() - start) * 1000),
+                        indexing_settings_key=indexing_settings["key"],
+                        answer_settings_key=answer_settings["key"], version_ids=version_ids,
                     )
                     logged = db.client.table("answer_versions").select("version_id") \
                         .eq("answer_id", str(answer_id)).execute().data

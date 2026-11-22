@@ -24,3 +24,14 @@ def test_indexing_key_is_normalised():
 
 def test_different_values_give_different_keys():
     assert indexing_settings_row(_settings())["key"] != indexing_settings_row(_settings(chunk_size=400))["key"]
+
+
+def test_answer_key_names_its_values():
+    from app.generation.prompts import PROMPT_VERSION
+    from app.settings_rows import answer_settings_row
+    row = answer_settings_row(_settings())
+    assert row == {
+        "key": f"top40-rerank8-rerank-v3.5-claude-sonnet-4-6-p{PROMPT_VERSION}",
+        "retrieval_top_k": 40, "rerank_top_n": 8, "rerank_model": "rerank-v3.5",
+        "answer_model": "claude-sonnet-4-6", "prompt_version": PROMPT_VERSION,
+    }

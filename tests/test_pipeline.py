@@ -66,6 +66,8 @@ def mock_deps():
         "llm": llm,
         "formatter": formatter,
         "logger": logger,
+        "indexing_settings_key": "ik",
+        "answer_settings_key": "ak",
     }
 
 
@@ -121,3 +123,11 @@ async def test_pipeline_logs_detected_scope(mock_deps):
     mock_deps["reranker"].rerank.assert_called_once_with(
         mock_deps["vector_search"].search.return_value, query=question
     )
+
+
+@pytest.mark.asyncio
+async def test_pipeline_logs_settings_keys(mock_deps):
+    await QueryPipeline(**mock_deps).run("q")
+    kwargs = mock_deps["logger"].log.call_args.kwargs
+    assert (kwargs["indexing_settings_key"], kwargs["answer_settings_key"]) == ("ik", "ak")
+    assert not {"model_used", "formatted_answer"} & set(kwargs)

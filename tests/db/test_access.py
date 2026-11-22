@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import pytest
 
-from tests.db.conftest import make_version, make_source
+from tests.db.conftest import answer_json, make_source, make_version
 from tests.db.test_schema import TABLES
 
 psycopg = pytest.importorskip("psycopg")
@@ -86,6 +86,6 @@ def test_service_role_reads_and_writes(pg):
     assert pg.execute("select count(*) from sources").fetchone()[0] >= 1
     pg.execute("select promote_version(%s)", (d,))
     answer_id = pg.execute("select log_answer(%s::jsonb, %s::uuid[])",
-                        ('{"question":"q","llm_prompt":"p","llm_response":"r","model_used":"m","latency_ms":1}', [d])
+                        (answer_json(), [d])
                         ).fetchone()[0]
     assert answer_id is not None

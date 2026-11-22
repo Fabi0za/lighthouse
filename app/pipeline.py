@@ -21,6 +21,8 @@ class QueryPipeline:
         llm: LLMClient,
         formatter: ResponseFormatter,
         logger: AnswerLogger,
+        indexing_settings_key: str,
+        answer_settings_key: str,
     ):
         self.query_parser = query_parser
         self.vector_search = vector_search
@@ -28,6 +30,8 @@ class QueryPipeline:
         self.llm = llm
         self.formatter = formatter
         self.logger = logger
+        self.indexing_settings_key = indexing_settings_key
+        self.answer_settings_key = answer_settings_key
 
     async def run(self, question: str) -> dict[str, Any]:
         start = time.monotonic()
@@ -58,9 +62,9 @@ class QueryPipeline:
             reranked_chunks=reranked_chunks,
             llm_prompt=user_prompt,
             llm_response=llm_response,
-            formatted_answer=formatted,
-            model_used=self.llm.model,
             latency_ms=latency_ms,
+            indexing_settings_key=self.indexing_settings_key,
+            answer_settings_key=self.answer_settings_key,
             version_ids=list(dict.fromkeys(c["version_id"] for c in reranked_chunks)),
         )
 

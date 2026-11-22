@@ -5,7 +5,7 @@ import json
 
 import pytest
 
-from tests.db.conftest import make_reference_rows, make_source, make_version
+from tests.db.conftest import answer_json, make_reference_rows, make_source, make_version
 
 psycopg = pytest.importorskip("psycopg")
 from psycopg import errors
@@ -103,11 +103,8 @@ def test_log_answer_dedupes_versions(pg):
     s1, s2 = make_source(pg, key="a"), make_source(pg, key="b")
     d1 = make_version(pg, s1, status="current")
     d2 = make_version(pg, s2, status="current")
-    log = {"question": "q", "detected_scope": None, "retrieved_chunks": [], "reranked_chunks": [],
-           "llm_prompt": "p", "llm_response": "r", "formatted_answer": {}, "model_used": "m",
-           "latency_ms": 12}
     ids = [d1, d1, d2, d1, d2, d2, d1, d1]
-    answer_id = pg.execute("select log_answer(%s::jsonb, %s::uuid[])", (json.dumps(log), ids)).fetchone()[0]
+    answer_id = pg.execute("select log_answer(%s::jsonb, %s::uuid[])", (answer_json(latency_ms=12), ids)).fetchone()[0]
     rows = pg.execute(
         "select version_id from answer_versions where answer_id = %s", (answer_id,)
     ).fetchall()
@@ -117,8 +114,7 @@ def test_log_answer_dedupes_versions(pg):
 
 
 def _answer(scope):
-    return json.dumps({"question": "q", "llm_prompt": "p", "llm_response": "r",
-                       "model_used": "m", "latency_ms": 1, "detected_scope": scope})
+    return answer_json(detected_scope=scope)
 
 
 def test_detected_scope_is_stored(pg):
@@ -144,9 +140,8 @@ def test_answers_have_no_detected_filters(pg):
 # --- answers_that_saw --------------------------------------------------------
 
 def _log(conn, question, version_ids, at):
-    answer_id = conn.execute("select log_answer(%s::jsonb, %s::uuid[])", (json.dumps(
-        {"question": question, "llm_prompt": "p", "llm_response": "r", "model_used": "m", "latency_ms": 1}),
-        version_ids)).fetchone()[0]
+    answer_id = conn.execute("select log_answer(%s::jsonb, %s::uuid[])",
+                             (answer_json(question=question), version_ids)).fetchone()[0]
     conn.execute("update answers set created_at = %s where id = %s", (at, answer_id))
     return answer_id
 

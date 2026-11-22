@@ -2,6 +2,10 @@ from __future__ import annotations
 
 from typing import Any
 
+# Raise when a change to this file changes what the model is given: answers record it
+# through their answer settings. tests/test_versioned_constants.py guards it.
+PROMPT_VERSION = 1
+
 SYSTEM_PROMPT = """You are a technical knowledge assistant for field engineers working with electrical installation documents. Your role is to provide accurate, cited answers based on the provided context.
 
 Rules:

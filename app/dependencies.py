@@ -8,6 +8,7 @@ from app.pipeline import QueryPipeline
 from app.retrieval.query_parser import QueryParser
 from app.retrieval.reranker import CohereReranker
 from app.retrieval.search import VectorSearch
+from app.settings_rows import answer_settings_row, indexing_settings_row
 
 
 def build_dependencies():
@@ -26,7 +27,11 @@ def build_dependencies():
     query_parser = QueryParser(known_scopes=db.get_known_scopes())
 
     vector_search = VectorSearch(db=db, embedder=embedder, top_k=settings.retrieval_top_k)
-    reranker = CohereReranker(api_key=settings.cohere_api_key, top_n=settings.rerank_top_n)
+    reranker = CohereReranker(api_key=settings.cohere_api_key, top_n=settings.rerank_top_n,
+                              model=settings.rerank_model)
+    indexing_settings, answer_settings = indexing_settings_row(settings), answer_settings_row(settings)
+    db.save_indexing_settings(indexing_settings)
+    db.save_answer_settings(answer_settings)
     formatter = ResponseFormatter()
     logger = AnswerLogger(db=db)
 
@@ -37,6 +42,8 @@ def build_dependencies():
         llm=llm,
         formatter=formatter,
         logger=logger,
+        indexing_settings_key=indexing_settings["key"],
+        answer_settings_key=answer_settings["key"],
     )
 
     return {

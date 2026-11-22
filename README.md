@@ -87,7 +87,7 @@ The API will be available at `http://localhost:8000`.
 | Method | Path | Description |
 |--------|------|-------------|
 | `POST` | `/query` | Ask a question, get a cited answer |
-| `GET` | `/answers/{answer_id}` | Retrieve an answer's full trace |
+| `GET` | `/answers/{answer_id}` | An answer's full trace, its formatted answer, the versions it saw and the settings it used |
 | `GET` | `/versions` | List all versions |
 | `POST` | `/eval/run` | Run evaluation suite |
 | `GET` | `/eval/runs` | List evaluation runs |

@@ -9,6 +9,7 @@ import re
 from typing import Any
 
 from app.config import Settings
+from app.generation.prompts import PROMPT_VERSION
 from app.ingestion.chunker import CHUNKER_VERSION
 
 _NOT_KEY = re.compile(r"[^a-z0-9.]+")
@@ -30,3 +31,17 @@ def indexing_settings_row(settings: Settings) -> dict[str, Any]:
     key = settings_key(values["embedding_model"], values["dimensions"], values["chunk_size"],
                        values["chunk_overlap"], f"c{CHUNKER_VERSION}")
     return {"key": key, **values}
+
+
+def answer_settings_row(settings: Settings) -> dict[str, Any]:
+    values = {
+        "retrieval_top_k": settings.retrieval_top_k,
+        "rerank_top_n": settings.rerank_top_n,
+        "rerank_model": settings.rerank_model,
+        "answer_model": settings.llm_model,
+        "prompt_version": PROMPT_VERSION,
+    }
+    key = settings_key(f"top{values['retrieval_top_k']}", f"rerank{values['rerank_top_n']}",
+                       values["rerank_model"], values["answer_model"], f"p{PROMPT_VERSION}")
+    return {"key": key, **values}
+

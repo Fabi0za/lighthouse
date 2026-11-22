@@ -216,3 +216,17 @@ def test_current_indexing_settings_keys_are_distinct(db, mock_supabase):
     assert db.current_indexing_settings_keys() == ["a", "b"]
     mock_supabase.eq.assert_called_with("status", "current")
 
+
+def test_save_answer_settings_upserts_on_key(db, mock_supabase):
+    db.save_answer_settings({"key": "k"})
+    mock_supabase.table.assert_called_with("answer_settings")
+    mock_supabase.upsert.assert_called_once_with({"key": "k"}, on_conflict="key")
+
+
+def test_versions_seen_by_an_answer(db, mock_supabase):
+    mock_supabase.execute.return_value = MagicMock(data=[
+        {"versions": {"source_key": "s", "version_label": "V1", "status": "retired"}}])
+    assert db.versions_seen("a1") == [{"source_key": "s", "version_label": "V1", "status": "retired"}]
+    mock_supabase.table.assert_called_with("answer_versions")
+    mock_supabase.eq.assert_called_with("answer_id", "a1")
+

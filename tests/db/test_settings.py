@@ -76,3 +76,34 @@ def test_current_settings_keys(pg):
     make_version(pg, a, text_sha256="t2", indexing_settings_key="test-b")  # loading, not current
     rows = pg.execute("select distinct indexing_settings_key from versions where status = 'current'").fetchall()
     assert rows == [("test-a",)]
+
+
+# --- answer settings ---------------------------------------------------------
+
+def test_answer_needs_known_settings(pg):
+    from tests.db.conftest import answer_json
+    make_reference_rows(pg)
+    for over in ({"indexing_settings_key": "unknown"}, {"answer_settings_key": "unknown"}):
+        with pytest.raises(errors.ForeignKeyViolation), pg.transaction():
+            pg.execute("select log_answer(%s::jsonb, '{}'::uuid[])", (answer_json(**over),))
+
+
+def test_answer_records_its_settings(pg):
+    from tests.db.conftest import answer_json
+    make_reference_rows(pg)
+    a = pg.execute("select log_answer(%s::jsonb, '{}'::uuid[])", (answer_json(),)).fetchone()[0]
+    row = pg.execute("select indexing_settings_key, answer_settings_key from answers where id = %s", (a,)).fetchone()
+    assert row == ("test-a", "test-answers")
+
+
+@pytest.mark.parametrize("top_k, top_n", [(8, 40), (0, 0)])
+def test_rerank_top_n_not_above_top_k(pg, top_k, top_n):
+    with pytest.raises(errors.CheckViolation):
+        pg.execute("insert into answer_settings values ('x', %s, %s, 'r', 'a', 1)", (top_k, top_n))
+
+
+def test_answers_have_no_model_used_or_formatted_answer(pg):
+    cols = {r[0] for r in pg.execute(
+        "select column_name from information_schema.columns where table_name = 'answers'")}
+    assert {"indexing_settings_key", "answer_settings_key"} <= cols
+    assert not cols & {"model_used", "formatted_answer"}

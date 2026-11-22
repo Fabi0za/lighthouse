@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     chunk_overlap: int = 50
     retrieval_top_k: int = 40
     rerank_top_n: int = 8
+    rerank_model: str = "rerank-v3.5"
     confirmation_max_age_days: int = 180  # a source not confirmed for longer is flagged overdue
 
     model_config = {"env_file": ".env"}

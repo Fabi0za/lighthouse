@@ -42,6 +42,8 @@ Each entry: what changed and why, then the evidence. Measurements live in [basel
   Evidence: chunker, embedder, loader and prompt tests (embedded text `[Doc (V2) — S]` + text, stored text without it, one header per source in the prompt); 335 tests pass with the database tests.
 - **Every version records the indexing settings it was loaded with (embedding model, dimensions, chunk size, overlap, chunker version); the store refuses current versions under different settings, and the loader stops before loading when the configuration differs.** Chunks embedded under different settings cannot be compared in one search.
   Evidence: database tests for the settings checks and for mixing (refused across sources, allowed for a lone source); a loader test stops before any load; a hash guard fails when `chunker.py` changes without a decision on `CHUNKER_VERSION`; 356 tests pass with the database tests.
+- **Each answer points to the indexing and answer settings it used (top-k, rerank top-n and model, answer model, prompt version); `model_used` and the stored formatted answer are gone, and `GET /answers/{id}` derives the formatted answer and lists the versions seen.** An answer could not be traced to its prompt or reranker, and the formatted answer duplicated the response.
+  Evidence: database tests for the settings references and checks; pipeline, logger, API and settings-row tests; a hash guard on `prompts.py` for `PROMPT_VERSION`; 367 tests pass with the database tests.
 
 ## 2026-11-21
 
