@@ -1,7 +1,7 @@
 [project]
-name = "rag"
+name = "lighthouse"
 version = "0.1.0"
-description = "Hierarchical RAG for electrical installation technical documents"
+description = "Keeps an answering assistant on the current version of the documents it answers from"
 requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.115.0",

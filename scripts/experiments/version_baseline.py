@@ -93,7 +93,7 @@ async def main():
 
     embedder = Embedder(s.cohere_api_key, s.embedding_model, s.embedding_dimensions)
     llm = LLMClient(api_key=s.anthropic_api_key, model=s.llm_model)
-    query_parser = QueryParser(known_providers=db.get_known_scopes())
+    query_parser = QueryParser(known_scopes=db.get_known_scopes())
     reranker = CohereReranker(api_key=s.cohere_api_key, top_n=s.rerank_top_n)
     formatter = ResponseFormatter()
     logger = QueryLogger(db=db)
@@ -128,14 +128,14 @@ async def main():
                     chunks, embeddings, source_fields = scratch_built
                     scratch = scratch_chunks(chunks, embeddings, query_embedding, v12, source_fields)
                     retrieved = stale_candidates(retrieved, scratch, v13["id"], s.retrieval_top_k)
-                reranked = reranker.rerank(retrieved, query=question, detected_provider=parsed.detected_provider)
+                reranked = reranker.rerank(retrieved, query=question)
                 user_prompt = build_user_prompt(question, reranked)
                 answer = await llm.generate(build_system_prompt(), user_prompt)
                 formatted = formatter.format(answer, reranked)
 
                 run = {
                     "question_id": qid, "run": i, "question": question,
-                    "detected_provider": parsed.detected_provider,
+                    "detected_scope": parsed.detected_scope,
                     "retrieved_counts": {v: sum(1 for c in retrieved if label.get(c["document_id"], "other") == v)
                                          for v in ("V1.2", "V1.3", "other")},
                     "reranked": [

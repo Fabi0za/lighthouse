@@ -17,7 +17,7 @@ def create_app(
     db: DatabaseClient | None = None,
     settings: Settings | None = None,
 ) -> FastAPI:
-    app = FastAPI(title="RAG Technical Knowledge Assistant")
+    app = FastAPI(title="Lighthouse")
 
     @app.post("/query")
     async def query(request: QueryRequest) -> dict[str, Any]:

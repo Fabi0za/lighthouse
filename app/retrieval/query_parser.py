@@ -6,29 +6,29 @@ from dataclasses import dataclass
 @dataclass
 class ParsedQuery:
     original_question: str
-    detected_provider: str | None = None
+    detected_scope: str | None = None
 
     def to_filters(self) -> dict[str, str]:
         filters = {}
-        if self.detected_provider:
-            filters["scope"] = self.detected_provider
+        if self.detected_scope:
+            filters["scope"] = self.detected_scope
         return filters
 
 
 class QueryParser:
-    def __init__(self, known_providers: list[str]):
-        self.known_providers = known_providers
+    def __init__(self, known_scopes: list[str]):
+        self.known_scopes = known_scopes
 
     def parse(self, question: str) -> ParsedQuery:
         question_lower = question.lower()
-        detected_provider = None
+        detected_scope = None
 
-        for provider in self.known_providers:
-            if provider.lower() in question_lower:
-                detected_provider = provider
+        for scope in self.known_scopes:
+            if scope.lower() in question_lower:
+                detected_scope = scope
                 break
 
         return ParsedQuery(
             original_question=question,
-            detected_provider=detected_provider,
+            detected_scope=detected_scope,
         )

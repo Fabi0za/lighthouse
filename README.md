@@ -105,7 +105,7 @@ Versions are never deleted; a newer version retires the old one. The API has no 
 python scripts/load_corpus.py [--dry-run] [--parsed-cache DIR]
 
 # Query the system
-python scripts/test_query.py "Your question here"
+python scripts/ask.py "Your question here"
 ```
 
 ## Tests
@@ -147,7 +147,7 @@ app/
 │   ├── chunker.py         # Table-aware, section-based chunking
 │   └── embedder.py        # Cohere embeddings
 ├── retrieval/
-│   ├── query_parser.py    # Grid provider detection
+│   ├── query_parser.py    # Scope detection
 │   ├── reranker.py        # Cohere neural reranker
 │   └── search.py          # Vector search
 ├── generation/

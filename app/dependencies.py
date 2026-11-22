@@ -23,8 +23,7 @@ def build_dependencies():
 
     llm = LLMClient(api_key=settings.anthropic_api_key, model=settings.llm_model)
 
-    known_providers = db.get_known_scopes()
-    query_parser = QueryParser(known_providers=known_providers)
+    query_parser = QueryParser(known_scopes=db.get_known_scopes())
 
     vector_search = VectorSearch(db=db, embedder=embedder, top_k=settings.retrieval_top_k)
     reranker = CohereReranker(api_key=settings.cohere_api_key, top_n=settings.rerank_top_n)

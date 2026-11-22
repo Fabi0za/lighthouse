@@ -1,39 +1,35 @@
 from app.retrieval.query_parser import QueryParser
 
 
-def test_detect_known_provider():
-    parser = QueryParser(known_providers=["Provider X", "Provider Y", "GridCo"])
-    result = parser.parse("How do I wire component A for Provider X?")
-    assert result.detected_provider == "Provider X"
+def test_detect_known_scope():
+    parser = QueryParser(known_scopes=["BKW", "EKZ"])
+    result = parser.parse("Was gilt im Netz der BKW für Steuerlösungen?")
+    assert result.detected_scope == "BKW"
 
 
-def test_detect_no_provider():
-    parser = QueryParser(known_providers=["Provider X", "Provider Y"])
-    result = parser.parse("What is the general wiring standard?")
-    assert result.detected_provider is None
+def test_detect_no_scope():
+    parser = QueryParser(known_scopes=["BKW", "EKZ"])
+    result = parser.parse("Was gilt schweizweit für Steuerlösungen?")
+    assert result.detected_scope is None
 
 
 def test_case_insensitive_match():
-    parser = QueryParser(known_providers=["Provider X"])
-    result = parser.parse("Rules for provider x installations")
-    assert result.detected_provider == "Provider X"
+    parser = QueryParser(known_scopes=["EKZ"])
+    result = parser.parse("Regeln der ekz für Speicher")
+    assert result.detected_scope == "EKZ"
 
 
 def test_query_preserved():
-    parser = QueryParser(known_providers=[])
-    result = parser.parse("How do I install a meter?")
-    assert result.original_question == "How do I install a meter?"
+    parser = QueryParser(known_scopes=[])
+    result = parser.parse("Wie wird ein Zähler montiert?")
+    assert result.original_question == "Wie wird ein Zähler montiert?"
 
 
 def test_filters_dict():
-    parser = QueryParser(known_providers=["GridCo"])
-    result = parser.parse("GridCo compliance requirements")
-    filters = result.to_filters()
-    assert filters == {"scope": "GridCo"}
+    parser = QueryParser(known_scopes=["BKW"])
+    assert parser.parse("BKW Vorgaben").to_filters() == {"scope": "BKW"}
 
 
 def test_filters_empty_when_no_match():
-    parser = QueryParser(known_providers=["GridCo"])
-    result = parser.parse("General wiring standards")
-    filters = result.to_filters()
-    assert filters == {}
+    parser = QueryParser(known_scopes=["BKW"])
+    assert parser.parse("Allgemeine Vorgaben").to_filters() == {}

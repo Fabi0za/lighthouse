@@ -40,9 +40,7 @@ class QueryPipeline:
         retrieved_chunks = await self.vector_search.search(question)
 
         # 3. Re-rank
-        reranked_chunks = self.reranker.rerank(
-            retrieved_chunks, query=question, detected_provider=parsed.detected_provider
-        )
+        reranked_chunks = self.reranker.rerank(retrieved_chunks, query=question)
 
         # 4. Generate answer
         system_prompt = build_system_prompt()

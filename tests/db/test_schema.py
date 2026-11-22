@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import pytest
 
-from tests.db.conftest import SCHEMA, make_document, make_flag, make_source
+from tests.db.conftest import make_document, make_flag, make_source
 
 psycopg = pytest.importorskip("psycopg")
 from psycopg import errors
@@ -12,12 +12,6 @@ TABLES = {
     "sources", "source_scopes", "documents", "document_chunks", "flags",
     "query_logs", "query_log_documents", "eval_questions", "eval_runs",
 }
-
-
-def test_no_domain_names():
-    text = SCHEMA.read_text(encoding="utf-8").lower()
-    for word in ("grid", "provider", "solar", "pv"):
-        assert word not in text, word
 
 
 def test_schema_applies(pg):

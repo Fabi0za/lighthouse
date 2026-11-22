@@ -14,12 +14,7 @@ class CohereReranker:
         self.top_n = top_n
         self.model = model
 
-    def rerank(
-        self,
-        chunks: list[dict[str, Any]],
-        query: str,
-        detected_provider: str | None = None,
-    ) -> list[dict[str, Any]]:
+    def rerank(self, chunks: list[dict[str, Any]], query: str) -> list[dict[str, Any]]:
         if not chunks:
             return []
 
