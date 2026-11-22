@@ -45,7 +45,8 @@ Working notes for the build. Not for the README.
 - The parsed-output cache is keyed on the full file's sha256 only, so it ignores `max_pages`; a cache file made with another page limit would be used silently.
 - `promote_version` reads the version's source before locking it; harmless while a version cannot move to another source.
 - If marking a failed version as failed itself fails (database unreachable), that error hides the original one.
-- Changing indexing settings (embedding model, dimensions, chunk size, overlap, chunker version) requires reloading the whole store: current versions cannot mix settings, and there is no in-place re-index with a switch-over.
+- A change only in a figure is not detected: figures are left out of the text fingerprint, because their image descriptions are written by the parser and are not stable between parses.
+- Changing indexing settings (embedding model, dimensions, chunk size, overlap, chunker version, fingerprint rule) requires reloading the whole store: current versions cannot mix settings, and there is no in-place re-index with a switch-over.
 - The API has no authentication and is meant for local use only.
 - Covers that are images parse only as image descriptions, so a title or version statement printed there is not available as text (the three VSE recommendations; their labels in `corpus.yaml` come from the file names). This limits recognising a successor by its version statement.
 

@@ -1,5 +1,6 @@
 from app.config import Settings
 from app.ingestion.chunker import CHUNKER_VERSION
+from app.ingestion.fingerprint import FINGERPRINT_RULE
 from app.settings_rows import indexing_settings_row
 
 
@@ -11,9 +12,10 @@ def _settings(**over):
 def test_indexing_key_names_its_values():
     row = indexing_settings_row(_settings())
     assert row == {
-        "key": f"embed-v5.0-pro-1536-500-50-c{CHUNKER_VERSION}",
+        "key": f"embed-v5.0-pro-1536-500-50-c{CHUNKER_VERSION}-f{FINGERPRINT_RULE}",
         "embedding_model": "embed-v5.0-pro", "dimensions": 1536,
         "chunk_size": 500, "chunk_overlap": 50, "chunker_version": CHUNKER_VERSION,
+        "fingerprint_rule": FINGERPRINT_RULE,
     }
 
 

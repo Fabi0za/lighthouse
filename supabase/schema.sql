@@ -135,7 +135,8 @@ create table indexing_settings (
     chunk_size integer not null check (chunk_size > 0),
     chunk_overlap integer not null check (chunk_overlap >= 0 and chunk_overlap < chunk_size),
     chunker_version integer not null check (chunker_version > 0),  -- raised when chunking code changes
-    unique (embedding_model, dimensions, chunk_size, chunk_overlap, chunker_version)
+    fingerprint_rule integer not null check (fingerprint_rule > 0), -- raised when the text fingerprint rule changes
+    unique (embedding_model, dimensions, chunk_size, chunk_overlap, chunker_version, fingerprint_rule)
 );
 
 -- ---------------------------------------------------------------------------

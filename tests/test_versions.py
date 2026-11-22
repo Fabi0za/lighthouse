@@ -10,6 +10,8 @@ from app.ingestion.versions import first_pages
 from app.ingestion.versions import load_version as _load_version
 
 SECTIONS = [{"title": "S", "content": "Steuerdraht 2 ist optional", "page": 1}]
+RAW = {"result": {"chunks": [{"blocks": [{"type": "Text", "content": "Steuerdraht 2 ist optional",
+                                          "bbox": {"page": 1}}]}]}}
 SOURCE = "src-1"
 SETTINGS_KEY = "embed-v5.0-pro-1536-500-50-c1"
 
@@ -37,7 +39,7 @@ def _deps(existing: list[dict] | None = None, sections=SECTIONS, pages_seen: lis
     async def parse(path):
         if pages_seen is not None:
             pages_seen.append(len(PdfReader(path).pages))
-        return {"result": {"raw": True}}, sections
+        return RAW, sections
 
     parser.parse_pdf = parse
     chunker = MagicMock()
@@ -60,7 +62,7 @@ async def test_new_file_promoted(tmp_path):
     db.begin_load.assert_called_once_with(
         "src-1", "Doc", "V2", "https://example.org/v2.pdf", None, file_sha256(f), SETTINGS_KEY
     )
-    db.set_text_fingerprint.assert_called_once_with("new-doc", text_sha256(SECTIONS), {"result": {"raw": True}})
+    db.set_text_fingerprint.assert_called_once_with("new-doc", text_sha256(RAW), RAW)
     chunker.chunk_sections.assert_called_once_with(SECTIONS)
     embedder.embed_texts.assert_awaited_once_with(["[Doc (V2) — S]\nc1"])
     assert db.insert_chunks.call_args.args[0][0]["content"] == "c1"  # stored without the header
@@ -88,7 +90,7 @@ async def test_same_bytes_as_retired_version_skipped(tmp_path):
 async def test_same_text_new_bytes_is_dismissed(tmp_path):
     f = _pdf(tmp_path / "repackaged.pdf")
     existing = [{"id": "old", "status": "current", "file_sha256": "other-bytes",
-                 "text_sha256": text_sha256(SECTIONS)}]
+                 "text_sha256": text_sha256(RAW)}]
     db, parser, chunker, embedder = _deps(existing)
 
     action, doc_id, _ = await load_version(db, SOURCE, f, "Doc", None, parser, chunker, embedder)
@@ -167,7 +169,7 @@ async def test_cache_hit_uses_cached_output_instead_of_parser(tmp_path):
     assert action == "promoted"
     assert pages_seen == []  # parse_pdf never called, no truncation
     parser._extract_sections.assert_called_once_with(raw)
-    db.set_text_fingerprint.assert_called_once_with("new-doc", text_sha256(SECTIONS), raw)
+    db.set_text_fingerprint.assert_called_once_with("new-doc", text_sha256(raw), raw)
 
 
 async def test_cache_miss_parses(tmp_path):
@@ -195,7 +197,7 @@ def test_cached_output_path(tmp_path):
 async def test_unfinished_version_with_same_text_but_other_bytes_is_discarded(tmp_path, status):
     f = _pdf(tmp_path / "v2b.pdf")
     existing = [{"id": "stale", "status": status, "file_sha256": "older-bytes",
-                 "text_sha256": text_sha256(SECTIONS)}]
+                 "text_sha256": text_sha256(RAW)}]
     db, parser, chunker, embedder = _deps(existing)
 
     action, doc_id, _ = await load_version(db, SOURCE, f, "Doc", None, parser, chunker, embedder)

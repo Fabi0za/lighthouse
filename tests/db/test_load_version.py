@@ -27,6 +27,10 @@ def load_version(*args, **kwargs):
 SECTIONS = [{"title": "S", "content": "Steuerdraht 2 ist optional", "page": 1}]
 
 
+def raw_of(text):
+    return {"result": {"chunks": [{"blocks": [{"type": "Text", "content": text, "bbox": {"page": 1}}]}]}}
+
+
 class PgDb:
     def __init__(self, conn):
         self.c = conn
@@ -83,7 +87,7 @@ def _pdf(path: Path, height: int) -> Path:
 def _deps(fail_embedding: bool = False, fail_parse: bool = False):
     parser = MagicMock()
     parser.parse_pdf = AsyncMock(side_effect=TimeoutError("parser timed out")) if fail_parse \
-        else AsyncMock(return_value=({"result": {}}, SECTIONS))
+        else AsyncMock(return_value=(raw_of("Steuerdraht 2 ist optional"), SECTIONS))
     chunker = MagicMock()
     chunker.chunk_sections.return_value = [
         Chunk(content="c", section_title="S", page_number=1, chunk_index=0)]
@@ -186,7 +190,7 @@ async def test_second_version_reports_answers_that_saw_the_first(db, source, tmp
     db.c.execute("select log_answer(%s::jsonb, %s::uuid[])", (answer_json(), [v1]))
     db.c.commit()
     parser, chunker, embedder = _deps()
-    parser.parse_pdf = AsyncMock(return_value=({"result": {}}, [{"title": "S", "content": "neu", "page": 1}]))
+    parser.parse_pdf = AsyncMock(return_value=(raw_of("neu"), [{"title": "S", "content": "neu", "page": 1}]))
 
     result = await load_version(db, source, _pdf(tmp_path / "b.pdf", 300), "Doc", None, parser, chunker, embedder)
 

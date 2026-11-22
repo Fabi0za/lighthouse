@@ -10,9 +10,10 @@ psycopg = pytest.importorskip("psycopg")
 from psycopg import errors
 
 
-def _settings(conn, key="k", model="m", dimensions=1536, size=500, overlap=50, chunker=1):
-    conn.execute("insert into indexing_settings values (%s, %s, %s, %s, %s, %s)",
-                 (key, model, dimensions, size, overlap, chunker))
+def _settings(conn, key="k", model="m", dimensions=1536, size=500, overlap=50, chunker=1, fingerprint=1):
+    conn.execute("insert into indexing_settings (key, embedding_model, dimensions, chunk_size, chunk_overlap, "
+                 "chunker_version, fingerprint_rule) values (%s, %s, %s, %s, %s, %s, %s)",
+                 (key, model, dimensions, size, overlap, chunker, fingerprint))
 
 
 def test_dimensions_must_match_the_vector_column(pg):
@@ -29,6 +30,16 @@ def test_overlap_below_chunk_size(pg, size, overlap):
 def test_chunker_version_positive(pg):
     with pytest.raises(errors.CheckViolation):
         _settings(pg, chunker=0)
+
+
+def test_fingerprint_rule_positive(pg):
+    with pytest.raises(errors.CheckViolation):
+        _settings(pg, fingerprint=0)
+
+
+def test_fingerprint_rule_is_part_of_the_settings(pg):
+    _settings(pg, key="k1", fingerprint=1)
+    _settings(pg, key="k2", fingerprint=2)  # same other values, different rule: a different row
 
 
 def test_settings_key_format(pg):

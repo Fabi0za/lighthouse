@@ -89,7 +89,8 @@ def make_reference_rows(conn) -> None:
     )
     conn.execute(
         "insert into indexing_settings (key, embedding_model, dimensions, chunk_size, chunk_overlap, "
-        "chunker_version) values ('test-a', 'm', 1536, 500, 50, 1), ('test-b', 'm', 1536, 400, 50, 1) "
+        "chunker_version, fingerprint_rule) values ('test-a', 'm', 1536, 500, 50, 1, 1), "
+        "('test-b', 'm', 1536, 400, 50, 1, 1) "
         "on conflict do nothing"
     )
     conn.execute(

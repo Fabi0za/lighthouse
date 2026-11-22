@@ -13,12 +13,13 @@ from pathlib import Path
 import pytest
 
 from app.generation import prompts
-from app.ingestion import chunker
+from app.ingestion import chunker, fingerprint
 
 ROOT = Path(__file__).resolve().parent.parent
 
 RECORDED = {
     "app/generation/prompts.py": ("PROMPT_VERSION", 2, "edc6fdf619645034cddf45b19027a5b4e41a34ee12a94aa841b86f45c6263222"),
+    "app/ingestion/fingerprint.py": ("FINGERPRINT_RULE", 1, "340022d8019f445ecd4fd9413e424804dd875a96afc3fb54246ae75aeb7b3970"),
     "app/ingestion/chunker.py": ("CHUNKER_VERSION", 1, "552ef27c36e7584f83868573a7a2a093e86cedcdce99ea919b5da152a5d79a8d"),
 }
 
@@ -56,3 +57,8 @@ def test_guard_fails_when_the_version_was_raised_without_recording(monkeypatch):
 
 def test_prompt_version_matches_its_source():
     _check("app/generation/prompts.py", "PROMPT_VERSION", prompts.PROMPT_VERSION)
+
+
+def test_fingerprint_rule_matches_its_source():
+    _check("app/ingestion/fingerprint.py", "FINGERPRINT_RULE", fingerprint.FINGERPRINT_RULE)
+

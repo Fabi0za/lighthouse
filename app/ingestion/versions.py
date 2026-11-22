@@ -97,7 +97,7 @@ async def load_version(
                 raw_output, sections = await parser.parse_pdf(str(parse_path))
         reason = "load_failed"
 
-        text_hash = text_sha256(sections)
+        text_hash = text_sha256(raw_output)
         for v in others:
             if v.get("text_sha256") != text_hash:
                 continue

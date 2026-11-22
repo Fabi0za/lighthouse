@@ -17,8 +17,8 @@ sys.modules["load_corpus"] = lc
 _spec.loader.exec_module(lc)
 
 ROOT = Path(__file__).resolve().parent.parent
-SETTINGS_ROW = {"key": "embed-v5.0-pro-1536-500-50-c1", "embedding_model": "embed-v5.0-pro", "dimensions": 1536,
-                "chunk_size": 500, "chunk_overlap": 50, "chunker_version": 1}
+SETTINGS_ROW = {"key": "embed-v5.0-pro-1536-500-50-c1-f1", "embedding_model": "embed-v5.0-pro", "dimensions": 1536,
+                "chunk_size": 500, "chunk_overlap": 50, "chunker_version": 1, "fingerprint_rule": 1}
 
 REFERENCES = """
 levels:

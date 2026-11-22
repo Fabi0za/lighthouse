@@ -11,6 +11,7 @@ from typing import Any
 from app.config import Settings
 from app.generation.prompts import PROMPT_VERSION
 from app.ingestion.chunker import CHUNKER_VERSION
+from app.ingestion.fingerprint import FINGERPRINT_RULE
 
 _NOT_KEY = re.compile(r"[^a-z0-9.]+")
 
@@ -27,9 +28,10 @@ def indexing_settings_row(settings: Settings) -> dict[str, Any]:
         "chunk_size": settings.chunk_size,
         "chunk_overlap": settings.chunk_overlap,
         "chunker_version": CHUNKER_VERSION,
+        "fingerprint_rule": FINGERPRINT_RULE,
     }
     key = settings_key(values["embedding_model"], values["dimensions"], values["chunk_size"],
-                       values["chunk_overlap"], f"c{CHUNKER_VERSION}")
+                       values["chunk_overlap"], f"c{CHUNKER_VERSION}", f"f{FINGERPRINT_RULE}")
     return {"key": key, **values}
 
 

@@ -58,6 +58,8 @@ Each entry: what changed and why, then the evidence. Measurements live in [basel
   Evidence: a test that one rate-limit error is retried, and that the reranker's error class is the SDK's; 428 tests pass with the database tests.
 - **The prompt no longer uses the old project's words: no "field engineers" or "electrical installation documents", "higher rank" instead of "higher hierarchy priority", and `(Level: …, Rank: …)` instead of `(Type: …, Priority: …)`; `PROMPT_VERSION` is 2.** One vocabulary in code and docs; the rules themselves are unchanged (no tuning).
   Evidence: the vocabulary test now scans `prompts.py` with no exemption; a test that every rule is still in the system prompt; 429 tests pass with the database tests.
+- **The text fingerprint follows the starting rule: the parser's blocks in order with headings and short blocks, without page headers, footers, page numbers and figures; its rule version is stored in the indexing settings and their key.** The old rule ignored headings and short values, so a changed heading or limit made no new version, while footers could make a false one.
+  Evidence: fingerprint tests per included and excluded block type; on the 11 cached parses: 11 distinct fingerprints, all changed from the old rule, V1.2 still differs from V1.3 (`scripts/experiments/fingerprint_check.py`, output in `plans-local/fingerprint-check.txt`); 436 tests pass.
 
 ## 2026-11-21
 
